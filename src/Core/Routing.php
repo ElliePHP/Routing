@@ -111,7 +111,7 @@ class Routing
      * @param string $method HTTP method (GET, POST, etc.)
      * @param string $url Route path (supports FastRoute patterns)
      * @param string $class Controller class name
-     * @param callable|string|array|null $handler Handler method name, closure, or [Class, 'method'] array
+     * @param \Closure|callable|string|array|null $handler Handler method name, closure, or [Class, 'method'] array
      * @param array $middleware Array of middleware to apply
      * @param string|null $name Optional route name
      * @param string|null $domain Optional domain constraint
@@ -120,7 +120,7 @@ class Routing
         string  $method,
         string  $url,
         string  $class = "",
-        callable|string|array|null $handler = null,
+        \Closure|callable|string|array|null $handler = null,
         array   $middleware = [],
         ?string $name = null,
         ?string $domain = null,
@@ -675,7 +675,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function get(string $url, callable|string|array $handler, array $options = []): void
+    public function get(string $url, \Closure|callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('GET', $url,
             $options['class'] ?? '',
@@ -693,7 +693,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function post(string $url, callable|string|array $handler, array $options = []): void
+    public function post(string $url, \Closure|callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('POST', $url,
             $options['class'] ?? '',
@@ -711,7 +711,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function put(string $url, callable|string|array $handler, array $options = []): void
+    public function put(string $url, \Closure|callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('PUT', $url,
             $options['class'] ?? '',
@@ -729,7 +729,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function delete(string $url, callable|string|array $handler, array $options = []): void
+    public function delete(string $url, \Closure|callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('DELETE', $url,
             $options['class'] ?? '',
@@ -747,7 +747,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function patch(string $url, callable|string|array $handler, array $options = []): void
+    public function patch(string $url, \Closure|callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('PATCH', $url,
             $options['class'] ?? '',
