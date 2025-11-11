@@ -21,6 +21,7 @@ class RouteDebugger
                 'name' => $route['name'],
                 'handler' => $this->formatHandler($route),
                 'middleware' => $this->formatMiddleware($route['middleware'] ?? []),
+                'domain' => $route['domain'] ?? null,
             ];
         }, $routes);
     }
@@ -35,17 +36,19 @@ class RouteDebugger
         }
 
         $output = "\n";
-        $output .= str_repeat('=', 100) . "\n";
-        $output .= sprintf("%-8s %-40s %-30s %s\n", 'METHOD', 'PATH', 'NAME', 'HANDLER');
-        $output .= str_repeat('=', 100) . "\n";
+        $output .= str_repeat('=', 130) . "\n";
+        $output .= sprintf("%-8s %-35s %-25s %-30s %s\n", 'METHOD', 'PATH', 'NAME', 'DOMAIN', 'HANDLER');
+        $output .= str_repeat('=', 130) . "\n";
 
         foreach ($routes as $route) {
             $handler = $this->formatHandler($route);
+            $domain = $route['domain'] ?? '*';
             $output .= sprintf(
-                "%-8s %-40s %-30s %s\n",
+                "%-8s %-35s %-25s %-30s %s\n",
                 $route['method'],
                 $route['path'],
                 $route['name'],
+                $domain,
                 $handler
             );
 
@@ -55,7 +58,7 @@ class RouteDebugger
             }
         }
 
-        $output .= str_repeat('=', 100) . "\n";
+        $output .= str_repeat('=', 130) . "\n";
         $output .= "Total routes: " . count($routes) . "\n\n";
 
         return $output;
@@ -82,7 +85,7 @@ class RouteDebugger
      */
     private function formatMiddleware(array $middleware): array
     {
-        return array_map(function ($mw) {
+        return array_map(static function ($mw) {
             if (is_string($mw)) {
                 $parts = explode('\\', $mw);
                 return end($parts);

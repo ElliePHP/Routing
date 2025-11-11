@@ -38,13 +38,17 @@ class Routing
     private readonly RouteDebugger $debugger;
     private readonly ErrorFormatterInterface $errorFormatter;
     private ?float $requestStartTime = null;
+    private readonly bool $enforceDomain;
+    private readonly array $allowedDomains;
 
     public function __construct(
         ?string $routes_directory = '/',
         bool $debugMode = false,
         bool $cacheEnabled = false,
         ?string $cacheDirectory = null,
-        ?ErrorFormatterInterface $errorFormatter = null
+        ?ErrorFormatterInterface $errorFormatter = null,
+        bool $enforceDomain = false,
+        array $allowedDomains = []
     ) {
         $factory = new Psr17Factory();
         $this->responseFactory = $factory;
@@ -55,12 +59,14 @@ class Routing
         $this->cache = new RouteCache($cacheDirectory ?? sys_get_temp_dir());
         $this->debugger = new RouteDebugger();
         $this->errorFormatter = $errorFormatter ?? new ErrorFormatter();
+        $this->enforceDomain = $enforceDomain;
+        $this->allowedDomains = $allowedDomains;
     }
 
     /**
      * Create a route group with shared attributes
      * 
-     * @param array $options Group options (prefix, middleware, name)
+     * @param array $options Group options (prefix, middleware, name, domain)
      * @param callable $callback Callback to define routes within the group
      */
     public function group(array $options, callable $callback): void
@@ -85,6 +91,11 @@ class Routing
             $options["middleware"] = $parentGroup["middleware"];
         }
 
+        // Domain inheritance - child domain overrides parent
+        if (!isset($options["domain"]) && isset($parentGroup["domain"])) {
+            $options["domain"] = $parentGroup["domain"];
+        }
+
         $newGroup = array_merge($parentGroup, $options);
         $this->groupStack[] = $newGroup;
         $callback($this);
@@ -100,6 +111,7 @@ class Routing
      * @param mixed $handler Handler method name or closure
      * @param array $middleware Array of middleware to apply
      * @param string|null $name Optional route name
+     * @param string|null $domain Optional domain constraint
      */
     public function addRoute(
         string  $method,
@@ -108,6 +120,7 @@ class Routing
         mixed   $handler = null,
         array   $middleware = [],
         ?string $name = null,
+        ?string $domain = null,
     ): void
     {
         $groupOptions = $this->getCurrentGroupOptions();
@@ -126,6 +139,9 @@ class Routing
         $groupMiddleware = $groupOptions["middleware"] ?? [];
         $allMiddleware = array_merge($groupMiddleware, $middleware);
 
+        // Get domain from group if not specified
+        $routeDomain = $domain ?? $groupOptions["domain"] ?? null;
+
         // Normalize handler/class
         if (is_array($handler) && count($handler) === 2) {
             [$class, $methodHandler] = $handler;
@@ -142,6 +158,7 @@ class Routing
             "handler" => $handler,
             "middleware" => $allMiddleware,
             "name" => $groupOptions["name"] ?? ($name ?? null),
+            "domain" => $routeDomain,
         ];
 
         // Generate name if not provided
@@ -183,14 +200,16 @@ class Routing
         }
 
         try {
-            $this->ensureInitialized();
+            // Get the host from the request for domain-aware initialization
+            $host = $request->getUri()->getHost();
+            $this->ensureInitialized($host);
             $response = $this->routeRequest($request);
 
             // Add debug headers if in debug mode
             if ($this->debugMode && $this->requestStartTime !== null) {
                 $timing = $this->debugger->getTimingInfo($this->requestStartTime);
                 $response = $response
-                    ->withHeader('X-Debug-Time', (string)$timing['duration_ms'] . 'ms')
+                    ->withHeader('X-Debug-Time', $timing['duration_ms'] . 'ms')
                     ->withHeader('X-Debug-Routes', (string)count($this->routes));
             }
 
@@ -200,17 +219,13 @@ class Routing
         }
     }
 
-    private function ensureInitialized(): void
+    private function ensureInitialized(?string $domain = null): void
     {
-        if ($this->dispatcher instanceof Dispatcher) {
-            return;
-        }
-
         // Try to load from cache first
-        if ($this->cacheEnabled && $this->cache->exists() && $this->routes === []) {
+        if ($this->cacheEnabled && $this->routes === [] && $this->cache->exists()) {
             try {
                 $this->routes = $this->cache->load();
-            } catch (Throwable $e) {
+            } catch (Throwable) {
                 // Cache load failed, fall back to loading routes
                 $this->routes = [];
             }
@@ -224,18 +239,66 @@ class Routing
             if ($this->cacheEnabled) {
                 try {
                     $this->cache->save($this->routes);
-                } catch (Throwable $e) {
+                } catch (Throwable) {
                     // Cache save failed, continue without caching
                 }
             }
         }
 
-        $this->buildDispatcher();
+        // Always rebuild dispatcher for the current domain
+        // This allows different routes for different domains
+        $this->buildDispatcher($domain);
     }
 
-    private function buildDispatcher(): void
+    private function buildDispatcher(?string $domain = null): void
     {
         $routes = $this->routes;
+        
+        // If domain is provided, filter routes to only those matching the domain
+        if ($domain !== null) {
+            $matchedRoutes = [];
+            $patternRoutes = [];
+            
+            foreach ($routes as $route) {
+                // If route has no domain constraint, include it
+                if (!isset($route['domain'])) {
+                    $matchedRoutes[] = $route;
+                    continue;
+                }
+                
+                // Check if domain matches
+                $match = $this->matchDomain($route['domain'], $domain);
+                if ($match !== false) {
+                    // Prioritize exact matches over pattern matches
+                    if ($route['domain'] === $domain) {
+                        $matchedRoutes[] = $route;
+                    } else {
+                        $patternRoutes[] = $route;
+                    }
+                }
+            }
+            
+            // For routes with same method+path, prefer exact domain matches
+            $routeKeys = [];
+            $filteredRoutes = [];
+            
+            // First add exact matches
+            foreach ($matchedRoutes as $route) {
+                $key = $route['method'] . ':' . $route['path'];
+                $routeKeys[$key] = true;
+                $filteredRoutes[] = $route;
+            }
+            
+            // Then add pattern matches only if no exact match exists
+            foreach ($patternRoutes as $route) {
+                $key = $route['method'] . ':' . $route['path'];
+                if (!isset($routeKeys[$key])) {
+                    $filteredRoutes[] = $route;
+                }
+            }
+            
+            $routes = $filteredRoutes;
+        }
 
         $this->dispatcher = simpleDispatcher(function (RouteCollector $r) use ($routes): void {
             foreach ($routes as $route) {
@@ -252,6 +315,17 @@ class Routing
             $uri = rtrim($uri, '/');
         }
 
+        // Get the host from the request
+        $host = $request->getUri()->getHost();
+
+        // Check domain enforcement
+        if ($this->enforceDomain && !empty($this->allowedDomains) && !$this->isDomainAllowed($host)) {
+            throw new RouterException("Domain not allowed: $host", 403);
+        }
+
+        // Build dispatcher for this specific domain
+        $this->buildDispatcher($host);
+
         $method = $request->getMethod();
         $result = $this->dispatcher->dispatch($method, $uri);
         $status = $result[0];
@@ -259,7 +333,7 @@ class Routing
         return match ($status) {
             Dispatcher::NOT_FOUND => throw new RouteNotFoundException("Route Not Found", 404),
             Dispatcher::METHOD_NOT_ALLOWED => throw new RouterException("Method Not Allowed", 405),
-            Dispatcher::FOUND => $this->handleFoundRoute($request, $result[1], $result[2]),
+            Dispatcher::FOUND => $this->handleFoundRoute($request, $result[1], $result[2], $host),
             default => throw new RouterException("Unexpected routing error", 500),
         };
     }
@@ -267,9 +341,23 @@ class Routing
     private function handleFoundRoute(
         ServerRequestInterface $request,
         array                  $route,
-        array                  $vars
+        array                  $vars,
+        string                 $host
     ): ResponseInterface
     {
+        // Check if route has domain constraint
+        if (isset($route["domain"])) {
+            $domainMatch = $this->matchDomain($route["domain"], $host);
+            if ($domainMatch === false) {
+                throw new RouteNotFoundException("Route not found for domain: $host", 404);
+            }
+            
+            // Add domain parameters to route vars
+            if (is_array($domainMatch)) {
+                $vars = array_merge($domainMatch, $vars);
+            }
+        }
+
         $middlewares = $route["middleware"] ?? [];
 
         // Create the final handler for the route
@@ -485,7 +573,7 @@ class Routing
      * 
      * @param string $url Route path
      * @param mixed $handler Controller class, method, or closure
-     * @param array $options Additional options (class, middleware, name)
+     * @param array $options Additional options (class, middleware, name, domain)
      */
     public function get(string $url, mixed $handler, array $options = []): void
     {
@@ -493,7 +581,8 @@ class Routing
             $options['class'] ?? '',
             $handler,
             $options['middleware'] ?? [],
-            $options['name'] ?? null
+            $options['name'] ?? null,
+            $options['domain'] ?? null
         );
     }
 
@@ -502,7 +591,7 @@ class Routing
      * 
      * @param string $url Route path
      * @param mixed $handler Controller class, method, or closure
-     * @param array $options Additional options (class, middleware, name)
+     * @param array $options Additional options (class, middleware, name, domain)
      */
     public function post(string $url, mixed $handler, array $options = []): void
     {
@@ -510,7 +599,8 @@ class Routing
             $options['class'] ?? '',
             $handler,
             $options['middleware'] ?? [],
-            $options['name'] ?? null
+            $options['name'] ?? null,
+            $options['domain'] ?? null
         );
     }
 
@@ -519,7 +609,7 @@ class Routing
      * 
      * @param string $url Route path
      * @param mixed $handler Controller class, method, or closure
-     * @param array $options Additional options (class, middleware, name)
+     * @param array $options Additional options (class, middleware, name, domain)
      */
     public function put(string $url, mixed $handler, array $options = []): void
     {
@@ -527,7 +617,8 @@ class Routing
             $options['class'] ?? '',
             $handler,
             $options['middleware'] ?? [],
-            $options['name'] ?? null
+            $options['name'] ?? null,
+            $options['domain'] ?? null
         );
     }
 
@@ -536,7 +627,7 @@ class Routing
      * 
      * @param string $url Route path
      * @param mixed $handler Controller class, method, or closure
-     * @param array $options Additional options (class, middleware, name)
+     * @param array $options Additional options (class, middleware, name, domain)
      */
     public function delete(string $url, mixed $handler, array $options = []): void
     {
@@ -544,7 +635,8 @@ class Routing
             $options['class'] ?? '',
             $handler,
             $options['middleware'] ?? [],
-            $options['name'] ?? null
+            $options['name'] ?? null,
+            $options['domain'] ?? null
         );
     }
 
@@ -553,7 +645,7 @@ class Routing
      * 
      * @param string $url Route path
      * @param mixed $handler Controller class, method, or closure
-     * @param array $options Additional options (class, middleware, name)
+     * @param array $options Additional options (class, middleware, name, domain)
      */
     public function patch(string $url, mixed $handler, array $options = []): void
     {
@@ -561,7 +653,8 @@ class Routing
             $options['class'] ?? '',
             $handler,
             $options['middleware'] ?? [],
-            $options['name'] ?? null
+            $options['name'] ?? null,
+            $options['domain'] ?? null
         );
     }
 
@@ -594,7 +687,33 @@ class Routing
      */
     public function printRoutes(): string
     {
-        $this->ensureInitialized();
+        // Load routes without building dispatcher
+        if ($this->routes === []) {
+            // Try to load from cache first
+            if ($this->cacheEnabled && $this->cache->exists()) {
+                try {
+                    $this->routes = $this->cache->load();
+                } catch (Throwable) {
+                    // Cache load failed, fall back to loading routes
+                    $this->routes = [];
+                }
+            }
+
+            // Only load routes if not already loaded
+            if ($this->routes === []) {
+                $this->loadRoutes();
+                
+                // Save to cache if enabled
+                if ($this->cacheEnabled) {
+                    try {
+                        $this->cache->save($this->routes);
+                    } catch (Throwable) {
+                        // Cache save failed, continue without caching
+                    }
+                }
+            }
+        }
+        
         return $this->debugger->generateRouteTable($this->routes);
     }
 
@@ -634,9 +753,81 @@ class Routing
                 $route['class'] ?? '',
                 $route['handler'] ?? null,
                 $route['middleware'] ?? [],
-                $route['name'] ?? null
+                $route['name'] ?? null,
+                $route['domain'] ?? null
             );
         }
+    }
+
+    /**
+     * Check if a domain is allowed
+     */
+    private function isDomainAllowed(string $host): bool
+    {
+        if (empty($this->allowedDomains)) {
+            return true;
+        }
+
+        return array_any($this->allowedDomains, fn($allowedDomain) => $this->matchDomain($allowedDomain, $host) !== false);
+
+    }
+
+    /**
+     * Match a domain pattern against a host
+     * 
+     * @param string $pattern Domain pattern (e.g., "example.com" or "{account}.example.com")
+     * @param string $host The actual host from the request
+     * @return bool|array False if no match, true if match without params, array of params if match with params
+     */
+    private function matchDomain(string $pattern, string $host): bool|array
+    {
+        // Exact match
+        if ($pattern === $host) {
+            return true;
+        }
+
+        // Check if pattern has parameters
+        if (!str_contains($pattern, '{')) {
+            return false;
+        }
+
+        // Convert domain pattern to regex
+        // {account}.example.com -> ^(?P<account>[^.]+)\.example\.com$
+        // First replace parameters with placeholders, then quote, then replace placeholders with regex
+        $paramMap = [];
+        $paramIndex = 0;
+        
+        // Extract parameters and replace with placeholders
+        $patternWithPlaceholders = preg_replace_callback(
+            '/\{([a-zA-Z_]\w*)}/',
+            static function ($matches) use (&$paramMap, &$paramIndex) {
+                $placeholder = '___PARAM_%s___';
+                $key = sprintf($placeholder, $paramIndex++);
+                $paramMap[$key] = $matches[1];
+                return $key;
+            },
+            $pattern
+        );
+        
+        // Quote the pattern (now placeholders are safe)
+        $quotedPattern = preg_quote($patternWithPlaceholders, '/');
+        
+        // Replace placeholders with regex patterns
+        foreach ($paramMap as $key => $paramName) {
+            $quotedPattern = str_replace($key, '(?P<' . $paramName . '>[^.]+)', $quotedPattern);
+        }
+        
+        $regex = '/^' . $quotedPattern . '$/i';
+
+        if (preg_match($regex, $host, $matches)) {
+            // Extract named parameters
+            $params = array_filter($matches, static function ($key) {
+                return is_string($key);
+            }, ARRAY_FILTER_USE_KEY);
+            return $params ?: true;
+        }
+
+        return false;
     }
 
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ElliePHP\Components\Routing\Core;
 
 use ElliePHP\Components\Routing\Exceptions\RouterException;
+use JsonException;
 
 /**
  * Handles caching of compiled routes for production environments
@@ -61,10 +62,11 @@ class RouteCache
 
     /**
      * Save routes to cache
+     * @throws JsonException
      */
     public function save(array $routes): void
     {
-        $content = json_encode($routes);
+        $content = json_encode($routes, JSON_THROW_ON_ERROR);
         if ($content === false) {
             throw new RouterException("Failed to encode routes for caching");
         }

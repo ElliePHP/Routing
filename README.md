@@ -14,6 +14,7 @@ A minimal, fast routing component for ElliePHP API framework based on FastRoute 
 - **Flexible Handlers**: Support for closures, controller classes, and callable arrays
 - **Middleware Support**: PSR-15 middleware with proper stack execution
 - **Route Groups**: Organize routes with shared prefixes, middleware, and names
+- **Domain Routing**: Support for subdomain and multi-tenant routing with domain parameters
 - **Route Caching**: Production-ready route caching for improved performance
 - **Debug Mode**: Detailed error messages, timing info, and route visualization
 - **Type Safe**: PHP 8.4+ with strict types and proper type hints
@@ -288,6 +289,357 @@ Router::group(['name' => 'api'], function() {
 });
 ```
 
+### Domain Routing
+
+Domain routing allows you to create routes that only respond to specific domains or subdomains. This is perfect for multi-tenant applications, API subdomains, or separating admin panels.
+
+#### Basic Domain Constraints
+
+```php
+// Main website routes
+Router::get('/', function() {
+    return ['message' => 'Welcome to example.com'];
+}, ['domain' => 'example.com']);
+
+Router::get('/about', function() {
+    return ['page' => 'about'];
+}, ['domain' => 'example.com']);
+
+// API subdomain routes
+Router::get('/users', [UserController::class, 'index'], [
+    'domain' => 'api.example.com'
+]);
+
+Router::post('/users', [UserController::class, 'store'], [
+    'domain' => 'api.example.com'
+]);
+
+// Admin subdomain routes
+Router::get('/dashboard', [AdminController::class, 'dashboard'], [
+    'domain' => 'admin.example.com'
+]);
+
+Router::get('/users', [AdminController::class, 'users'], [
+    'domain' => 'admin.example.com'
+]);
+```
+
+#### Domain Groups
+
+Group multiple routes under the same domain to keep your code organized:
+
+```php
+// API subdomain with all endpoints
+Router::group(['domain' => 'api.example.com'], function() {
+    Router::get('/users', [UserController::class, 'index']);
+    Router::post('/users', [UserController::class, 'store']);
+    Router::get('/posts', [PostController::class, 'index']);
+    Router::get('/comments', [CommentController::class, 'index']);
+});
+
+// API with versioning
+Router::group(['domain' => 'api.example.com', 'prefix' => '/v1'], function() {
+    Router::get('/users', [UserController::class, 'index']);
+    Router::get('/posts', [PostController::class, 'index']);
+    // Accessible at: http://api.example.com/v1/users
+});
+
+Router::group(['domain' => 'api.example.com', 'prefix' => '/v2'], function() {
+    Router::get('/users', [UserControllerV2::class, 'index']);
+    Router::get('/posts', [PostControllerV2::class, 'index']);
+    // Accessible at: http://api.example.com/v2/users
+});
+
+// Admin panel with authentication
+Router::group([
+    'domain' => 'admin.example.com',
+    'middleware' => [AuthMiddleware::class, AdminMiddleware::class]
+], function() {
+    Router::get('/dashboard', [AdminController::class, 'dashboard']);
+    Router::get('/users', [AdminController::class, 'users']);
+    Router::get('/settings', [AdminController::class, 'settings']);
+    Router::get('/reports', [AdminController::class, 'reports']);
+});
+```
+
+#### Domain Parameters (Multi-Tenant SaaS)
+
+Extract subdomain parts as parameters for multi-tenant applications:
+
+```php
+// Basic tenant routing
+Router::get('/dashboard', function($request, $params) {
+    $tenant = $params['tenant'];
+    
+    // Load tenant-specific data
+    $tenantData = Database::getTenant($tenant);
+    
+    return [
+        'tenant' => $tenant,
+        'company' => $tenantData['company_name'],
+        'message' => 'Welcome to your dashboard'
+    ];
+}, ['domain' => '{tenant}.example.com']);
+
+// Access: http://acme.example.com/dashboard
+// Returns: {"tenant":"acme","company":"Acme Corp","message":"Welcome to your dashboard"}
+
+// Access: http://widgets.example.com/dashboard
+// Returns: {"tenant":"widgets","company":"Widgets Inc","message":"Welcome to your dashboard"}
+
+// Combine domain and path parameters
+Router::get('/users/{id}', function($request, $params) {
+    $tenant = $params['tenant'];
+    $userId = $params['id'];
+    
+    // Load user from tenant database
+    $user = Database::getTenantUser($tenant, $userId);
+    
+    return [
+        'tenant' => $tenant,
+        'user' => $user
+    ];
+}, ['domain' => '{tenant}.example.com']);
+
+// Access: http://acme.example.com/users/42
+// Returns: {"tenant":"acme","user":{"id":42,"name":"John Doe"}}
+
+// Real-world example: Tenant-specific API
+Router::get('/api/projects', function($request, $params) {
+    $tenant = $params['tenant'];
+    return [
+        'tenant' => $tenant,
+        'projects' => ProjectService::getForTenant($tenant)
+    ];
+}, ['domain' => '{tenant}.example.com']);
+
+// Access: http://acme.example.com/api/projects
+// Access: http://widgets.example.com/api/projects
+```
+
+#### Multi-Tenant Application Example
+
+Complete multi-tenant SaaS application structure:
+
+```php
+// Configure domain enforcement
+Router::configure([
+    'enforce_domain' => true,
+    'allowed_domains' => [
+        'myapp.com',              // Main marketing site
+        'app.myapp.com',          // Main app domain
+        '{tenant}.myapp.com',     // Tenant subdomains
+    ],
+]);
+
+// Main marketing site
+Router::group(['domain' => 'myapp.com'], function() {
+    Router::get('/', [MarketingController::class, 'home']);
+    Router::get('/pricing', [MarketingController::class, 'pricing']);
+    Router::get('/signup', [MarketingController::class, 'signup']);
+});
+
+// Tenant application routes
+Router::group(['domain' => '{tenant}.myapp.com'], function() {
+    // Public routes
+    Router::get('/login', [AuthController::class, 'showLogin']);
+    Router::post('/login', [AuthController::class, 'login']);
+    
+    // Protected tenant routes
+    Router::group(['middleware' => [AuthMiddleware::class]], function() {
+        Router::get('/dashboard', function($request, $params) {
+            $tenant = $params['tenant'];
+            return [
+                'tenant' => $tenant,
+                'stats' => DashboardService::getStats($tenant)
+            ];
+        });
+        
+        Router::get('/projects', [ProjectController::class, 'index']);
+        Router::post('/projects', [ProjectController::class, 'store']);
+        Router::get('/projects/{id}', [ProjectController::class, 'show']);
+        
+        Router::get('/team', [TeamController::class, 'index']);
+        Router::post('/team/invite', [TeamController::class, 'invite']);
+        
+        Router::get('/settings', [SettingsController::class, 'show']);
+        Router::put('/settings', [SettingsController::class, 'update']);
+    });
+});
+
+// Examples:
+// http://myapp.com/ - Marketing site
+// http://acme.myapp.com/dashboard - Acme's dashboard
+// http://widgets.myapp.com/projects - Widgets Inc's projects
+// http://startup.myapp.com/team - Startup's team page
+```
+
+#### Multiple Domain Parameters
+
+Extract multiple parts from the domain for advanced routing:
+
+```php
+// Regional routing
+Router::get('/api/data', function($request, $params) {
+    $region = $params['region'];
+    $service = $params['service'];
+    
+    return [
+        'service' => $service,
+        'region' => $region,
+        'endpoint' => "https://{$service}.{$region}.example.com",
+        'data' => RegionalService::getData($region, $service)
+    ];
+}, ['domain' => '{service}.{region}.example.com']);
+
+// Access: http://api.us-east.example.com/api/data
+// Returns: {"service":"api","region":"us-east","endpoint":"https://api.us-east.example.com","data":[...]}
+
+// Access: http://cdn.eu-west.example.com/api/data
+// Returns: {"service":"cdn","region":"eu-west","endpoint":"https://cdn.eu-west.example.com","data":[...]}
+
+// Multi-tenant with environment
+Router::get('/status', function($request, $params) {
+    return [
+        'tenant' => $params['tenant'],
+        'environment' => $params['env'],
+        'status' => 'operational'
+    ];
+}, ['domain' => '{tenant}.{env}.example.com']);
+
+// Access: http://acme.staging.example.com/status
+// Returns: {"tenant":"acme","environment":"staging","status":"operational"}
+
+// Access: http://acme.production.example.com/status
+// Returns: {"tenant":"acme","environment":"production","status":"operational"}
+```
+
+#### Domain Configuration
+
+```php
+Router::configure([
+    // Enforce domain whitelist (reject unlisted domains with 403)
+    'enforce_domain' => true,
+    
+    // Allowed domains (supports patterns with parameters)
+    'allowed_domains' => [
+        'example.com',
+        'api.example.com',
+        'admin.example.com',
+        '{tenant}.example.com',
+        '{app}.{region}.example.com'
+    ],
+]);
+```
+
+#### Routes Without Domain Constraints
+
+Routes without domain constraints work on any domain:
+
+```php
+// Health check endpoint - works on all domains
+Router::get('/health', function() {
+    return ['status' => 'ok', 'timestamp' => time()];
+});
+
+// Metrics endpoint - accessible from any domain
+Router::get('/metrics', function() {
+    return [
+        'requests' => MetricsService::getRequestCount(),
+        'uptime' => MetricsService::getUptime()
+    ];
+});
+
+// This route works on:
+// - http://example.com/health
+// - http://api.example.com/health
+// - http://admin.example.com/health
+// - http://tenant1.example.com/health
+// - http://any-subdomain.example.com/health
+```
+
+#### Real-World Complete Example
+
+```php
+<?php
+
+use ElliePHP\Components\Routing\Router;
+
+// Configure domains
+Router::configure([
+    'enforce_domain' => true,
+    'allowed_domains' => [
+        'myapp.com',
+        'api.myapp.com',
+        'admin.myapp.com',
+        '{tenant}.myapp.com'
+    ],
+]);
+
+// Marketing site (myapp.com)
+Router::group(['domain' => 'myapp.com'], function() {
+    Router::get('/', [HomeController::class, 'index']);
+    Router::get('/features', [HomeController::class, 'features']);
+    Router::get('/pricing', [HomeController::class, 'pricing']);
+    Router::post('/signup', [SignupController::class, 'register']);
+});
+
+// Public API (api.myapp.com)
+Router::group(['domain' => 'api.myapp.com', 'prefix' => '/v1'], function() {
+    // Public endpoints
+    Router::post('/auth/login', [ApiAuthController::class, 'login']);
+    Router::post('/auth/register', [ApiAuthController::class, 'register']);
+    
+    // Protected API endpoints
+    Router::group(['middleware' => [ApiAuthMiddleware::class]], function() {
+        Router::get('/users', [ApiUserController::class, 'index']);
+        Router::get('/users/{id}', [ApiUserController::class, 'show']);
+        Router::post('/users', [ApiUserController::class, 'store']);
+    });
+});
+
+// Admin panel (admin.myapp.com)
+Router::group([
+    'domain' => 'admin.myapp.com',
+    'middleware' => [AuthMiddleware::class, AdminMiddleware::class]
+], function() {
+    Router::get('/dashboard', [AdminDashboardController::class, 'index']);
+    Router::get('/tenants', [AdminTenantController::class, 'index']);
+    Router::get('/tenants/{id}', [AdminTenantController::class, 'show']);
+    Router::post('/tenants', [AdminTenantController::class, 'create']);
+    Router::delete('/tenants/{id}', [AdminTenantController::class, 'delete']);
+});
+
+// Multi-tenant application ({tenant}.myapp.com)
+Router::group(['domain' => '{tenant}.myapp.com'], function() {
+    // Public tenant pages
+    Router::get('/login', [TenantAuthController::class, 'showLogin']);
+    Router::post('/login', [TenantAuthController::class, 'login']);
+    
+    // Protected tenant routes
+    Router::group(['middleware' => [TenantAuthMiddleware::class]], function() {
+        Router::get('/dashboard', function($request, $params) {
+            $tenant = $params['tenant'];
+            return view('dashboard', [
+                'tenant' => TenantService::load($tenant),
+                'stats' => DashboardService::getStats($tenant)
+            ]);
+        });
+        
+        Router::get('/projects', [TenantProjectController::class, 'index']);
+        Router::post('/projects', [TenantProjectController::class, 'store']);
+        Router::get('/projects/{id}', [TenantProjectController::class, 'show']);
+        Router::put('/projects/{id}', [TenantProjectController::class, 'update']);
+        Router::delete('/projects/{id}', [TenantProjectController::class, 'destroy']);
+    });
+});
+
+// Health check - works on all domains
+Router::get('/health', function() {
+    return ['status' => 'ok'];
+});
+```
+
 ### Middleware
 
 #### Creating Middleware
@@ -434,6 +786,16 @@ Router::configure([
     
     // Custom error formatter (default: JsonErrorFormatter)
     'error_formatter' => new HtmlErrorFormatter(),
+    
+    // Enforce domain whitelist (default: false)
+    'enforce_domain' => false,
+    
+    // Allowed domains (supports domain parameters like {tenant}.example.com)
+    'allowed_domains' => [
+        'example.com',
+        'api.example.com',
+        '{tenant}.example.com'
+    ],
 ]);
 ```
 

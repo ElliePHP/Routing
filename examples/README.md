@@ -8,6 +8,7 @@ This directory contains working examples demonstrating various features of the E
 php examples/basic-usage.php
 php examples/controller-example.php
 php examples/middleware-example.php
+php examples/domain-routing.php
 php examples/non-facade-usage.php
 php examples/complete-application.php
 ```
@@ -41,6 +42,16 @@ Explores middleware functionality:
 - Middleware execution order
 
 **Key concepts**: PSR-15, middleware stack, request/response modification
+
+### domain-routing.php
+Demonstrates domain-based routing:
+- Domain constraints on routes
+- Subdomain routing (api.example.com, admin.example.com)
+- Multi-tenant routing with domain parameters
+- Domain groups
+- Domain enforcement and whitelisting
+
+**Key concepts**: Subdomains, multi-tenancy, domain parameters, SaaS applications
 
 ### non-facade-usage.php
 Demonstrates direct usage without the static facade:
