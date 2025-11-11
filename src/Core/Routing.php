@@ -288,11 +288,30 @@ class Routing
 
     /**
      * Get hash of current routes for cache invalidation
+     * Creates a hash based on route structure without serializing closures
      */
     private function getRoutesHash(): int
     {
         if ($this->routesHash === null) {
-            $this->routesHash = crc32(serialize($this->routes));
+            $routeData = [];
+            foreach ($this->routes as $route) {
+                // Create a serializable representation excluding closures
+                $routeData[] = [
+                    'method' => $route['method'] ?? '',
+                    'path' => $route['path'] ?? '',
+                    'class' => $route['class'] ?? '',
+                    'handler' => is_callable($route['handler'] ?? null) && !is_string($route['handler'] ?? null) 
+                        ? 'closure' 
+                        : ($route['handler'] ?? null),
+                    'middleware' => array_map(
+                        fn($mw) => is_string($mw) ? $mw : (is_object($mw) ? get_class($mw) : 'closure'),
+                        $route['middleware'] ?? []
+                    ),
+                    'name' => $route['name'] ?? null,
+                    'domain' => $route['domain'] ?? null,
+                ];
+            }
+            $this->routesHash = crc32(serialize($routeData));
         }
         return $this->routesHash;
     }
