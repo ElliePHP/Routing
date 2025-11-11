@@ -144,7 +144,7 @@ class SecurityHeadersMiddleware implements MiddlewareInterface
 
 ## Reporting Security Vulnerabilities
 
-If you discover a security vulnerability, please email security@example.com instead of using the issue tracker.
+If you discover a security vulnerability, please email bankuboy@proton.me instead of using the issue tracker.
 
 ## Security Checklist
 
