@@ -58,6 +58,7 @@ class CacheTest extends TestCase
     public function testGetCacheFile(): void
     {
         $cacheFile = $this->cache->getCacheFile();
-        $this->assertStringContainsString('ellie_routes.cache', $cacheFile);
+        $this->assertStringContainsString('ellie_routes_', $cacheFile);
+        $this->assertStringEndsWith('.cache', $cacheFile);
     }
 }
