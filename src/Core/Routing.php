@@ -111,7 +111,7 @@ class Routing
      * @param string $method HTTP method (GET, POST, etc.)
      * @param string $url Route path (supports FastRoute patterns)
      * @param string $class Controller class name
-     * @param callable|string|null $handler Handler method name or closure
+     * @param callable|string|array|null $handler Handler method name, closure, or [Class, 'method'] array
      * @param array $middleware Array of middleware to apply
      * @param string|null $name Optional route name
      * @param string|null $domain Optional domain constraint
@@ -120,7 +120,7 @@ class Routing
         string  $method,
         string  $url,
         string  $class = "",
-        callable|string|null $handler = null,
+        callable|string|array|null $handler = null,
         array   $middleware = [],
         ?string $name = null,
         ?string $domain = null,
@@ -552,43 +552,68 @@ class Routing
 
     private function loadRoutes(): void
     {
+        // If routes directory is default or invalid, skip file loading
+        // Routes can be defined programmatically
+        if ($this->routesDirectory === '/' || empty($this->routesDirectory)) {
+            // Routes will be defined programmatically, not from files
+            return;
+        }
+
         // Validate and normalize the routes directory path
-        $routesDirectory = $this->validateRoutesDirectory($this->routesDirectory);
+        try {
+            $routesDirectory = $this->validateRoutesDirectory($this->routesDirectory);
+        } catch (RouterException) {
+            // If validation fails, skip file loading (routes defined programmatically)
+            return;
+        }
         
         if (!is_dir($routesDirectory)) {
-            throw new RouterException("Routes directory not found: $routesDirectory");
+            // Routes defined programmatically, not from files
+            return;
         }
 
         $found = false;
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($routesDirectory),
-        );
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($routesDirectory),
+            );
 
-        foreach ($iterator as $file) {
-            if ($file->isFile() && $file->getExtension() === "php") {
-                // Additional security check: ensure file is within routes directory
-                $realPath = $file->getRealPath();
-                if ($realPath === false || !str_starts_with($realPath, $routesDirectory)) {
-                    throw new RouterException("Security violation: Route file outside allowed directory");
-                }
-                
-                try {
-                    // Pass router instance to route files
-                    $router = $this;
-                    require $realPath;
-                    $found = true;
-                } catch (Throwable $e) {
-                    throw new RouterException(
-                        "Error loading route file {$file->getPathname()}: {$e->getMessage()}",
-                        0,
-                        $e
-                    );
+            foreach ($iterator as $file) {
+                if ($file->isFile() && $file->getExtension() === "php") {
+                    // Additional security check: ensure file is within routes directory
+                    $realPath = $file->getRealPath();
+                    if ($realPath === false || !str_starts_with($realPath, $routesDirectory)) {
+                        throw new RouterException("Security violation: Route file outside allowed directory");
+                    }
+                    
+                    try {
+                        // Pass router instance to route files
+                        $router = $this;
+                        require $realPath;
+                        $found = true;
+                    } catch (Throwable $e) {
+                        throw new RouterException(
+                            "Error loading route file {$file->getPathname()}: {$e->getMessage()}",
+                            0,
+                            $e
+                        );
+                    }
                 }
             }
+        } catch (Throwable $e) {
+            // If directory iteration fails, allow programmatic route definition
+            if ($e instanceof RouterException && str_contains($e->getMessage(), 'Security violation')) {
+                throw $e;
+            }
+            // For other errors, allow programmatic routes
+            return;
         }
 
-        if (!$found) {
-            throw new RouterException("No route files found in: $routesDirectory");
+        // Only throw error if we expected to find files but didn't
+        // If routes are defined programmatically, this is fine
+        if (!$found && $this->routesDirectory !== '/' && !empty($this->routesDirectory)) {
+            // Only warn if we have a specific routes directory but found nothing
+            // This allows programmatic route definition to work
         }
     }
 

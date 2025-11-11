@@ -14,11 +14,11 @@ use Psr\Http\Message\ServerRequestInterface;
  * 
  * @mixin EllieRouter
  * 
- * @method static void get(string $url, mixed $handler, array $options = []) Register a GET route
- * @method static void post(string $url, mixed $handler, array $options = []) Register a POST route
- * @method static void put(string $url, mixed $handler, array $options = []) Register a PUT route
- * @method static void delete(string $url, mixed $handler, array $options = []) Register a DELETE route
- * @method static void patch(string $url, mixed $handler, array $options = []) Register a PATCH route
+ * @method static void get(string $url, callable|string|array $handler, array $options = []) Register a GET route
+ * @method static void post(string $url, callable|string|array $handler, array $options = []) Register a POST route
+ * @method static void put(string $url, callable|string|array $handler, array $options = []) Register a PUT route
+ * @method static void delete(string $url, callable|string|array $handler, array $options = []) Register a DELETE route
+ * @method static void patch(string $url, callable|string|array $handler, array $options = []) Register a PATCH route
  * @method static void group(array $options, callable $callback) Create a route group
  * @method static ResponseInterface handle(ServerRequestInterface $request) Handle an incoming request
  * @method static void reset() Reset router state
@@ -29,7 +29,7 @@ use Psr\Http\Message\ServerRequestInterface;
  * @method static bool isDebugMode() Check if debug mode is enabled
  * @method static bool isCacheEnabled() Check if cache is enabled
  * @method static void registerRoutes(array $routes) Register routes from array
- * @method static void addRoute(string $method, string $url, string $class = "", mixed $handler = null, array $middleware = [], ?string $name = null) Register a route with the router
+ * @method static void addRoute(string $method, string $url, string $class = "", callable|string|array|null $handler = null, array $middleware = [], ?string $name = null) Register a route with the router
  */
 final class Router
 {

@@ -6,6 +6,7 @@ namespace ElliePHP\Components\Routing\Core;
 
 use ElliePHP\Components\Routing\Exceptions\RouterException;
 use JsonException;
+use Throwable;
 
 /**
  * Handles caching of compiled routes for production environments
@@ -61,7 +62,12 @@ class RouteCache
         }
 
         $data = json_decode($content, true);
-        if (!is_array($data) || !isset($data['routes'])) {
+        if (!is_array($data)) {
+            return false;
+        }
+
+        // Backward compatibility: if cache is old format (just routes array), it's invalid
+        if (!isset($data['routes'])) {
             return false;
         }
 
@@ -70,12 +76,17 @@ class RouteCache
             return false;
         }
 
-        // Check if route files have been modified
-        if (isset($data['route_files_mtime'])) {
-            $cachedMtime = $data['route_files_mtime'];
-            $currentMtime = $this->getRoutesDirectoryMtime($routesDirectory);
-            
-            if ($currentMtime !== $cachedMtime) {
+        // Check if route files have been modified (only if routes directory exists and is valid)
+        if (isset($data['route_files_mtime']) && is_dir($routesDirectory) && $routesDirectory !== '/') {
+            try {
+                $cachedMtime = $data['route_files_mtime'];
+                $currentMtime = $this->getRoutesDirectoryMtime($routesDirectory);
+                
+                if ($currentMtime !== $cachedMtime) {
+                    return false;
+                }
+            } catch (Throwable) {
+                // If we can't check mtime, invalidate cache to be safe
                 return false;
             }
         }
