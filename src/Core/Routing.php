@@ -18,8 +18,8 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use ReflectionClass;
 use ReflectionException;
-use ReflectionMethod;
 use ReflectionNamedType;
 use Throwable;
 use function FastRoute\simpleDispatcher;
@@ -112,7 +112,7 @@ class Routing
      * @param string $method HTTP method (GET, POST, etc.)
      * @param string $url Route path (supports FastRoute patterns)
      * @param string $class Controller class name
-     * @param \Closure|callable|string|array|null $handler Handler method name, closure, or [Class, 'method'] array
+     * @param callable|string|array|null $handler Handler method name, closure, or [Class, 'method'] array
      * @param array $middleware Array of middleware to apply
      * @param string|null $name Optional route name
      * @param string|null $domain Optional domain constraint
@@ -121,7 +121,7 @@ class Routing
         string  $method,
         string  $url,
         string  $class = "",
-        \Closure|callable|string|array|null $handler = null,
+        callable|string|array|null $handler = null,
         array   $middleware = [],
         ?string $name = null,
         ?string $domain = null,
@@ -151,6 +151,8 @@ class Routing
             [$class, $methodHandler] = $handler;
             $handler = $methodHandler;
         } elseif (is_string($handler) && class_exists($handler)) {
+            // Handler is a class name, use it as the controller class
+            /** @var string $handler */
             $class = $handler;
             $handler = "process"; // default method
         }
@@ -216,6 +218,7 @@ class Routing
                 $timing = $this->debugger->getTimingInfo($this->requestStartTime);
                 $response = $response
                     ->withHeader('X-Debug-Time', $timing['duration_ms'] . 'ms')
+                    ->withHeader('X-FRV', 'ElliePHP Router')
                     ->withHeader('X-Debug-Routes', (string)count($this->routes));
             }
 
@@ -262,20 +265,16 @@ class Routing
     /**
      * Get dispatcher for a specific domain, using cache if available
      */
-    private function getDispatcherForDomain(?string $domain): Dispatcher
+    private function getDispatcherForDomain(?string $domain): void
     {
         $cacheKey = $domain ?? 'default';
         
         // Check if we have a cached dispatcher for this domain
         // Only check hash if routes might have changed (when routesHash is null, it means routes changed)
-        if (isset($this->dispatcherCache[$cacheKey])) {
-            // If routes hash is null, routes were modified, so rebuild
-            if ($this->routesHash !== null && 
-                isset($this->dispatcherCache[$cacheKey]['hash']) &&
-                $this->dispatcherCache[$cacheKey]['hash'] === $this->routesHash) {
-                $this->dispatcher = $this->dispatcherCache[$cacheKey]['dispatcher'];
-                return $this->dispatcher;
-            }
+        // If routes hash is null, routes were modified, so rebuild
+        if (isset($this->dispatcherCache[$cacheKey]['hash']) && $this->routesHash !== null && $this->dispatcherCache[$cacheKey]['hash'] === $this->routesHash) {
+            $this->dispatcher = $this->dispatcherCache[$cacheKey]['dispatcher'];
+            return;
         }
         
         // Build new dispatcher
@@ -291,8 +290,7 @@ class Routing
             'dispatcher' => $this->dispatcher,
             'hash' => $this->routesHash,
         ];
-        
-        return $this->dispatcher;
+
     }
 
     /**
@@ -313,7 +311,15 @@ class Routing
                     ? 'closure' 
                     : ($route['handler'] ?? null),
                 'middleware' => array_map(
-                    fn($mw) => is_string($mw) ? $mw : (is_object($mw) ? get_class($mw) : 'closure'),
+                    static function ($mw) {
+                        if (is_string($mw)) {
+                            return $mw;
+                        }
+                        if (is_object($mw)) {
+                            return get_class($mw);
+                        }
+                        return 'closure';
+                    },
                     $route['middleware'] ?? []
                 ),
                 'name' => $route['name'] ?? null,
@@ -496,17 +502,14 @@ class Routing
         // Cache reflection metadata for performance (major speedup!)
         $cacheKey = $class . '::' . $method;
         if (!isset($this->reflectionCache[$cacheKey])) {
-            $this->reflectionCache[$cacheKey] = [
-                'reflection' => new ReflectionMethod($class, $method),
-                'parameters' => $this->extractParameterMetadata($class, $method),
-            ];
+            $this->reflectionCache[$cacheKey] = $this->extractParameterMetadata($class, $method);
         }
 
-        $cached = $this->reflectionCache[$cacheKey];
-        $args = $this->matchParametersFast($cached['parameters'], $params, $request);
+        $paramMetadata = $this->reflectionCache[$cacheKey];
+        $args = $this->matchParametersFast($paramMetadata, $params, $request);
         $controller = new $class();
 
-        $result = $cached['reflection']->invokeArgs($controller, $args);
+        $result = $controller->$method(...$args);
         return $result instanceof ResponseInterface
             ? $result
             : $this->createResponse($result);
@@ -514,10 +517,12 @@ class Routing
 
     /**
      * Extract parameter metadata once and cache it (performance optimization)
+     * @throws ReflectionException
      */
     private function extractParameterMetadata(string $class, string $method): array
     {
-        $reflection = new ReflectionMethod($class, $method);
+        $reflectionClass = new ReflectionClass($class);
+        $reflection = $reflectionClass->getMethod($method);
         $metadata = [];
 
         foreach ($reflection->getParameters() as $param) {
@@ -525,7 +530,7 @@ class Routing
             $metadata[] = [
                 'name' => $param->getName(),
                 'type' => $type instanceof ReflectionNamedType ? $type->getName() : null,
-                'isBuiltin' => $type instanceof ReflectionNamedType ? $type->isBuiltin() : false,
+                'isBuiltin' => $type instanceof ReflectionNamedType && $type->isBuiltin(),
                 'isOptional' => $param->isOptional(),
                 'defaultValue' => $param->isOptional() ? $param->getDefaultValue() : null,
             ];
@@ -664,13 +669,6 @@ class Routing
             // For other errors, allow programmatic routes
             return;
         }
-
-        // Only throw error if we expected to find files but didn't
-        // If routes are defined programmatically, this is fine
-        if (!$found && $this->routesDirectory !== '/' && !empty($this->routesDirectory)) {
-            // Only warn if we have a specific routes directory but found nothing
-            // This allows programmatic route definition to work
-        }
     }
 
     /**
@@ -712,7 +710,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function get(string $url, \Closure|callable|string|array $handler, array $options = []): void
+    public function get(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('GET', $url,
             $options['class'] ?? '',
@@ -730,7 +728,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function post(string $url, \Closure|callable|string|array $handler, array $options = []): void
+    public function post(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('POST', $url,
             $options['class'] ?? '',
@@ -748,7 +746,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function put(string $url, \Closure|callable|string|array $handler, array $options = []): void
+    public function put(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('PUT', $url,
             $options['class'] ?? '',
@@ -766,7 +764,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function delete(string $url, \Closure|callable|string|array $handler, array $options = []): void
+    public function delete(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('DELETE', $url,
             $options['class'] ?? '',
@@ -784,7 +782,7 @@ class Routing
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function patch(string $url, \Closure|callable|string|array $handler, array $options = []): void
+    public function patch(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('PATCH', $url,
             $options['class'] ?? '',
