@@ -12,6 +12,8 @@ use Psr\Http\Message\ServerRequestInterface;
  * 
  * Provides a static interface to the routing system.
  * 
+ * @mixin EllieRouter
+ * 
  * @method static void get(string $url, mixed $handler, array $options = []) Register a GET route
  * @method static void post(string $url, mixed $handler, array $options = []) Register a POST route
  * @method static void put(string $url, mixed $handler, array $options = []) Register a PUT route
@@ -56,11 +58,23 @@ final class Router
      *   - cache_enabled: Enable route caching for production
      *   - cache_directory: Directory for cache files
      *   - error_formatter: Custom error formatter instance
+     * 
+     * @throws RouterException
      */
     public static function configure(array $config): void
     {
         if (self::$instance !== null) {
             throw new RouterException("Cannot configure router after it has been initialized");
+        }
+        
+        // Security: Warn if debug mode is enabled
+        if (isset($config['debug_mode']) && $config['debug_mode'] === true) {
+            if (getenv('APP_ENV') === 'production' || (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production')) {
+                trigger_error(
+                    'WARNING: Debug mode is enabled in production environment. This exposes sensitive information.',
+                    E_USER_WARNING
+                );
+            }
         }
         
         self::$config = array_merge(self::$config, $config);

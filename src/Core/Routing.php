@@ -408,21 +408,30 @@ class Routing
 
     private function loadRoutes(): void
     {
-        if (!is_dir($this->routesDirectory)) {
-            throw new RouterException("Routes directory not found: $this->routesDirectory");
+        // Validate and normalize the routes directory path
+        $routesDirectory = $this->validateRoutesDirectory($this->routesDirectory);
+        
+        if (!is_dir($routesDirectory)) {
+            throw new RouterException("Routes directory not found: $routesDirectory");
         }
 
         $found = false;
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($this->routesDirectory),
+            new RecursiveDirectoryIterator($routesDirectory),
         );
 
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === "php") {
+                // Additional security check: ensure file is within routes directory
+                $realPath = $file->getRealPath();
+                if ($realPath === false || !str_starts_with($realPath, $routesDirectory)) {
+                    throw new RouterException("Security violation: Route file outside allowed directory");
+                }
+                
                 try {
                     // Pass router instance to route files
                     $router = $this;
-                    require $file->getPathname();
+                    require $realPath;
                     $found = true;
                 } catch (Throwable $e) {
                     throw new RouterException(
@@ -435,8 +444,38 @@ class Routing
         }
 
         if (!$found) {
-            throw new RouterException("No route files found in: $this->routesDirectory");
+            throw new RouterException("No route files found in: $routesDirectory");
         }
+    }
+
+    /**
+     * Validate and normalize the routes directory path to prevent path traversal
+     */
+    private function validateRoutesDirectory(string $path): string
+    {
+        // Resolve to absolute path
+        $realPath = realpath($path);
+        
+        if ($realPath === false) {
+            throw new RouterException("Invalid routes directory path: $path");
+        }
+        
+        // Ensure no path traversal attempts
+        if (str_contains($path, '..')) {
+            throw new RouterException("Path traversal detected in routes directory");
+        }
+        
+        // Ensure it's a directory
+        if (!is_dir($realPath)) {
+            throw new RouterException("Routes directory is not a valid directory: $path");
+        }
+        
+        // Ensure it's readable
+        if (!is_readable($realPath)) {
+            throw new RouterException("Routes directory is not readable: $path");
+        }
+        
+        return $realPath;
     }
 
     // Helper methods for route definition

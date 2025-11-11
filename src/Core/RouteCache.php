@@ -15,7 +15,18 @@ class RouteCache
 
     public function __construct(string $cacheDirectory = '/tmp')
     {
-        $this->cacheFile = rtrim($cacheDirectory, '/') . '/ellie_routes.cache';
+        // Use unique cache filename to prevent predictable attacks
+        $uniqueId = md5(__DIR__);
+        $this->cacheFile = rtrim($cacheDirectory, '/') . '/ellie_routes_' . $uniqueId . '.cache';
+        
+        // Ensure cache directory exists and is writable
+        if (!is_dir($cacheDirectory)) {
+            throw new RouterException("Cache directory does not exist: $cacheDirectory");
+        }
+        
+        if (!is_writable($cacheDirectory)) {
+            throw new RouterException("Cache directory is not writable: $cacheDirectory");
+        }
     }
 
     /**
@@ -40,7 +51,7 @@ class RouteCache
             throw new RouterException("Failed to read route cache file");
         }
 
-        $routes = unserialize($content, ['allowed_classes' => false]);
+        $routes = json_decode($content, true);
         if (!is_array($routes)) {
             throw new RouterException("Invalid route cache format");
         }
@@ -53,12 +64,19 @@ class RouteCache
      */
     public function save(array $routes): void
     {
-        $content = serialize($routes);
+        $content = json_encode($routes);
+        if ($content === false) {
+            throw new RouterException("Failed to encode routes for caching");
+        }
+        
         $result = file_put_contents($this->cacheFile, $content, LOCK_EX);
         
         if ($result === false) {
             throw new RouterException("Failed to write route cache file");
         }
+        
+        // Set restrictive permissions on cache file
+        chmod($this->cacheFile, 0600);
     }
 
     /**
