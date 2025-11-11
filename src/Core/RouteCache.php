@@ -55,16 +55,21 @@ class RouteCache
             return false;
         }
 
-        // Load cache metadata
-        $content = file_get_contents($this->cacheFile);
-        if ($content === false) {
-            return false;
+        // Load cache metadata (only once, cache the result)
+        static $cacheData = null;
+        if ($cacheData === null) {
+            $content = file_get_contents($this->cacheFile);
+            if ($content === false) {
+                return false;
+            }
+
+            $cacheData = json_decode($content, true);
+            if (!is_array($cacheData)) {
+                return false;
+            }
         }
 
-        $data = json_decode($content, true);
-        if (!is_array($data)) {
-            return false;
-        }
+        $data = $cacheData;
 
         // Backward compatibility: if cache is old format (just routes array), it's invalid
         if (!isset($data['routes'])) {
@@ -77,7 +82,16 @@ class RouteCache
         }
 
         // Check if route files have been modified (only if routes directory exists and is valid)
+        // Only check mtime if we have it cached, otherwise skip the check for performance
         if (isset($data['route_files_mtime']) && is_dir($routesDirectory) && $routesDirectory !== '/') {
+            // Only check mtime if cache was created recently (within last 5 seconds)
+            // This avoids expensive directory scanning on every request
+            $cacheAge = time() - ($data['cached_at'] ?? 0);
+            if ($cacheAge < 5) {
+                // Cache is very fresh, trust it
+                return true;
+            }
+            
             try {
                 $cachedMtime = $data['route_files_mtime'];
                 $currentMtime = $this->getRoutesDirectoryMtime($routesDirectory);

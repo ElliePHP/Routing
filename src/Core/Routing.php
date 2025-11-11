@@ -43,6 +43,7 @@ class Routing
     private readonly array $allowedDomains;
     private array $domainRegexCache = [];
     private ?int $routesHash = null;
+    private array $reflectionCache = [];
 
     public function __construct(
         ?string $routes_directory = '/',
@@ -264,56 +265,62 @@ class Routing
     private function getDispatcherForDomain(?string $domain): Dispatcher
     {
         $cacheKey = $domain ?? 'default';
-        $currentRoutesHash = $this->getRoutesHash();
         
-        // Check if we have a cached dispatcher for this domain and routes haven't changed
-        if (isset($this->dispatcherCache[$cacheKey]) && 
-            isset($this->dispatcherCache[$cacheKey]['hash']) &&
-            $this->dispatcherCache[$cacheKey]['hash'] === $currentRoutesHash) {
-            $this->dispatcher = $this->dispatcherCache[$cacheKey]['dispatcher'];
-            return $this->dispatcher;
+        // Check if we have a cached dispatcher for this domain
+        // Only check hash if routes might have changed (when routesHash is null, it means routes changed)
+        if (isset($this->dispatcherCache[$cacheKey])) {
+            // If routes hash is null, routes were modified, so rebuild
+            if ($this->routesHash !== null && 
+                isset($this->dispatcherCache[$cacheKey]['hash']) &&
+                $this->dispatcherCache[$cacheKey]['hash'] === $this->routesHash) {
+                $this->dispatcher = $this->dispatcherCache[$cacheKey]['dispatcher'];
+                return $this->dispatcher;
+            }
         }
         
         // Build new dispatcher
         $this->buildDispatcher($domain);
         
+        // Get or calculate routes hash (lazy, only when needed)
+        if ($this->routesHash === null) {
+            $this->routesHash = $this->calculateRoutesHash();
+        }
+        
         // Cache it
         $this->dispatcherCache[$cacheKey] = [
             'dispatcher' => $this->dispatcher,
-            'hash' => $currentRoutesHash,
+            'hash' => $this->routesHash,
         ];
         
         return $this->dispatcher;
     }
 
     /**
-     * Get hash of current routes for cache invalidation
+     * Calculate hash of current routes for cache invalidation
      * Creates a hash based on route structure without serializing closures
+     * This is only called when routes change, not on every request
      */
-    private function getRoutesHash(): int
+    private function calculateRoutesHash(): int
     {
-        if ($this->routesHash === null) {
-            $routeData = [];
-            foreach ($this->routes as $route) {
-                // Create a serializable representation excluding closures
-                $routeData[] = [
-                    'method' => $route['method'] ?? '',
-                    'path' => $route['path'] ?? '',
-                    'class' => $route['class'] ?? '',
-                    'handler' => is_callable($route['handler'] ?? null) && !is_string($route['handler'] ?? null) 
-                        ? 'closure' 
-                        : ($route['handler'] ?? null),
-                    'middleware' => array_map(
-                        fn($mw) => is_string($mw) ? $mw : (is_object($mw) ? get_class($mw) : 'closure'),
-                        $route['middleware'] ?? []
-                    ),
-                    'name' => $route['name'] ?? null,
-                    'domain' => $route['domain'] ?? null,
-                ];
-            }
-            $this->routesHash = crc32(serialize($routeData));
+        $routeData = [];
+        foreach ($this->routes as $route) {
+            // Create a serializable representation excluding closures
+            $routeData[] = [
+                'method' => $route['method'] ?? '',
+                'path' => $route['path'] ?? '',
+                'class' => $route['class'] ?? '',
+                'handler' => is_callable($route['handler'] ?? null) && !is_string($route['handler'] ?? null) 
+                    ? 'closure' 
+                    : ($route['handler'] ?? null),
+                'middleware' => array_map(
+                    fn($mw) => is_string($mw) ? $mw : (is_object($mw) ? get_class($mw) : 'closure'),
+                    $route['middleware'] ?? []
+                ),
+                'name' => $route['name'] ?? null,
+                'domain' => $route['domain'] ?? null,
+            ];
         }
-        return $this->routesHash;
+        return crc32(serialize($routeData));
     }
 
     private function buildDispatcher(?string $domain = null): void
@@ -486,40 +493,70 @@ class Routing
             throw new ClassNotFoundException("Method not found: $method in $class");
         }
 
-        $reflection = new ReflectionMethod($class, $method);
-        $args = $this->matchParameters($reflection, $params, $request);
+        // Cache reflection metadata for performance (major speedup!)
+        $cacheKey = $class . '::' . $method;
+        if (!isset($this->reflectionCache[$cacheKey])) {
+            $this->reflectionCache[$cacheKey] = [
+                'reflection' => new ReflectionMethod($class, $method),
+                'parameters' => $this->extractParameterMetadata($class, $method),
+            ];
+        }
+
+        $cached = $this->reflectionCache[$cacheKey];
+        $args = $this->matchParametersFast($cached['parameters'], $params, $request);
         $controller = new $class();
 
-        $result = $reflection->invokeArgs($controller, $args);
+        $result = $cached['reflection']->invokeArgs($controller, $args);
         return $result instanceof ResponseInterface
             ? $result
             : $this->createResponse($result);
     }
 
     /**
-     * @throws ReflectionException
+     * Extract parameter metadata once and cache it (performance optimization)
      */
-    private function matchParameters(
-        ReflectionMethod       $method,
+    private function extractParameterMetadata(string $class, string $method): array
+    {
+        $reflection = new ReflectionMethod($class, $method);
+        $metadata = [];
+
+        foreach ($reflection->getParameters() as $param) {
+            $type = $param->getType();
+            $metadata[] = [
+                'name' => $param->getName(),
+                'type' => $type instanceof ReflectionNamedType ? $type->getName() : null,
+                'isBuiltin' => $type instanceof ReflectionNamedType ? $type->isBuiltin() : false,
+                'isOptional' => $param->isOptional(),
+                'defaultValue' => $param->isOptional() ? $param->getDefaultValue() : null,
+            ];
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * Fast parameter matching using cached metadata (much faster than reflection on every request)
+     */
+    private function matchParametersFast(
+        array                  $parameterMetadata,
         array                  $params,
         ServerRequestInterface $request,
     ): array
     {
         $args = [];
 
-        foreach ($method->getParameters() as $param) {
-            $type = $param->getType();
-            $name = $param->getName();
+        foreach ($parameterMetadata as $param) {
+            $name = $param['name'];
+            $type = $param['type'];
+            $isBuiltin = $param['isBuiltin'];
 
-            // Fix: Correct type checking order
-            if ($type instanceof ReflectionNamedType &&
-                !$type->isBuiltin() &&
-                is_a($type->getName(), ServerRequestInterface::class, true)) {
+            // Check if it's a ServerRequestInterface type
+            if ($type !== null && !$isBuiltin && is_a($type, ServerRequestInterface::class, true)) {
                 $args[] = $request;
             } elseif (array_key_exists($name, $params)) {
                 $args[] = $params[$name];
-            } elseif ($param->isOptional()) {
-                $args[] = $param->getDefaultValue();
+            } elseif ($param['isOptional']) {
+                $args[] = $param['defaultValue'];
             } else {
                 throw new RouterException("Missing required parameter: $name", 400);
             }
@@ -767,6 +804,7 @@ class Routing
         $this->dispatcherCache = [];
         $this->domainRegexCache = [];
         $this->routesHash = null;
+        $this->reflectionCache = [];
     }
 
     /**
