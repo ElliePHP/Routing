@@ -27,6 +27,7 @@ use function FastRoute\simpleDispatcher;
 class Routing
 {
     private ?Dispatcher $dispatcher = null;
+    private array $dispatcherCache = [];
     private array $routes = [];
     private array $groupStack = [];
     private readonly ResponseFactoryInterface $responseFactory;
@@ -40,6 +41,8 @@ class Routing
     private ?float $requestStartTime = null;
     private readonly bool $enforceDomain;
     private readonly array $allowedDomains;
+    private array $domainRegexCache = [];
+    private ?int $routesHash = null;
 
     public function __construct(
         ?string $routes_directory = '/',
@@ -108,7 +111,7 @@ class Routing
      * @param string $method HTTP method (GET, POST, etc.)
      * @param string $url Route path (supports FastRoute patterns)
      * @param string $class Controller class name
-     * @param mixed $handler Handler method name or closure
+     * @param callable|string|null $handler Handler method name or closure
      * @param array $middleware Array of middleware to apply
      * @param string|null $name Optional route name
      * @param string|null $domain Optional domain constraint
@@ -117,7 +120,7 @@ class Routing
         string  $method,
         string  $url,
         string  $class = "",
-        mixed   $handler = null,
+        callable|string|null $handler = null,
         array   $middleware = [],
         ?string $name = null,
         ?string $domain = null,
@@ -168,6 +171,8 @@ class Routing
 
         $this->routes[] = $route;
         $this->dispatcher = null;
+        $this->dispatcherCache = [];
+        $this->routesHash = null;
     }
 
 
@@ -224,7 +229,10 @@ class Routing
         // Try to load from cache first
         if ($this->cacheEnabled && $this->routes === [] && $this->cache->exists()) {
             try {
-                $this->routes = $this->cache->load();
+                // Check if cache is still valid
+                if ($this->cache->isValid($this->routesDirectory)) {
+                    $this->routes = $this->cache->load();
+                }
             } catch (Throwable) {
                 // Cache load failed, fall back to loading routes
                 $this->routes = [];
@@ -238,16 +246,55 @@ class Routing
             // Save to cache if enabled
             if ($this->cacheEnabled) {
                 try {
-                    $this->cache->save($this->routes);
+                    $this->cache->save($this->routes, $this->routesDirectory);
                 } catch (Throwable) {
                     // Cache save failed, continue without caching
                 }
             }
         }
 
-        // Always rebuild dispatcher for the current domain
+        // Get or build dispatcher for the current domain
         // This allows different routes for different domains
+        $this->getDispatcherForDomain($domain);
+    }
+
+    /**
+     * Get dispatcher for a specific domain, using cache if available
+     */
+    private function getDispatcherForDomain(?string $domain): Dispatcher
+    {
+        $cacheKey = $domain ?? 'default';
+        $currentRoutesHash = $this->getRoutesHash();
+        
+        // Check if we have a cached dispatcher for this domain and routes haven't changed
+        if (isset($this->dispatcherCache[$cacheKey]) && 
+            isset($this->dispatcherCache[$cacheKey]['hash']) &&
+            $this->dispatcherCache[$cacheKey]['hash'] === $currentRoutesHash) {
+            $this->dispatcher = $this->dispatcherCache[$cacheKey]['dispatcher'];
+            return $this->dispatcher;
+        }
+        
+        // Build new dispatcher
         $this->buildDispatcher($domain);
+        
+        // Cache it
+        $this->dispatcherCache[$cacheKey] = [
+            'dispatcher' => $this->dispatcher,
+            'hash' => $currentRoutesHash,
+        ];
+        
+        return $this->dispatcher;
+    }
+
+    /**
+     * Get hash of current routes for cache invalidation
+     */
+    private function getRoutesHash(): int
+    {
+        if ($this->routesHash === null) {
+            $this->routesHash = crc32(serialize($this->routes));
+        }
+        return $this->routesHash;
     }
 
     private function buildDispatcher(?string $domain = null): void
@@ -323,18 +370,27 @@ class Routing
             throw new RouterException("Domain not allowed: $host", 403);
         }
 
-        // Build dispatcher for this specific domain
-        $this->buildDispatcher($host);
+        // Get dispatcher for this specific domain (uses cache if available)
+        $this->getDispatcherForDomain($host);
 
         $method = $request->getMethod();
         $result = $this->dispatcher->dispatch($method, $uri);
         $status = $result[0];
 
         return match ($status) {
-            Dispatcher::NOT_FOUND => throw new RouteNotFoundException("Route Not Found", 404),
-            Dispatcher::METHOD_NOT_ALLOWED => throw new RouterException("Method Not Allowed", 405),
+            Dispatcher::NOT_FOUND => throw new RouteNotFoundException(
+                "Route not found: {$method} {$uri}",
+                404
+            ),
+            Dispatcher::METHOD_NOT_ALLOWED => throw new RouterException(
+                "Method {$method} not allowed for route: {$uri}",
+                405
+            ),
             Dispatcher::FOUND => $this->handleFoundRoute($request, $result[1], $result[2], $host),
-            default => throw new RouterException("Unexpected routing error", 500),
+            default => throw new RouterException(
+                "Unexpected dispatcher status: {$status}. This indicates a bug in FastRoute integration.",
+                500
+            ),
         };
     }
 
@@ -572,10 +628,10 @@ class Routing
      * Register a GET route
      * 
      * @param string $url Route path
-     * @param mixed $handler Controller class, method, or closure
+     * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function get(string $url, mixed $handler, array $options = []): void
+    public function get(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('GET', $url,
             $options['class'] ?? '',
@@ -590,10 +646,10 @@ class Routing
      * Register a POST route
      * 
      * @param string $url Route path
-     * @param mixed $handler Controller class, method, or closure
+     * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function post(string $url, mixed $handler, array $options = []): void
+    public function post(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('POST', $url,
             $options['class'] ?? '',
@@ -608,10 +664,10 @@ class Routing
      * Register a PUT route
      * 
      * @param string $url Route path
-     * @param mixed $handler Controller class, method, or closure
+     * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function put(string $url, mixed $handler, array $options = []): void
+    public function put(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('PUT', $url,
             $options['class'] ?? '',
@@ -626,10 +682,10 @@ class Routing
      * Register a DELETE route
      * 
      * @param string $url Route path
-     * @param mixed $handler Controller class, method, or closure
+     * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function delete(string $url, mixed $handler, array $options = []): void
+    public function delete(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('DELETE', $url,
             $options['class'] ?? '',
@@ -644,10 +700,10 @@ class Routing
      * Register a PATCH route
      * 
      * @param string $url Route path
-     * @param mixed $handler Controller class, method, or closure
+     * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
      */
-    public function patch(string $url, mixed $handler, array $options = []): void
+    public function patch(string $url, callable|string|array $handler, array $options = []): void
     {
         $this->addRoute('PATCH', $url,
             $options['class'] ?? '',
@@ -664,6 +720,9 @@ class Routing
         $this->routes = [];
         $this->groupStack = [];
         $this->dispatcher = null;
+        $this->dispatcherCache = [];
+        $this->domainRegexCache = [];
+        $this->routesHash = null;
     }
 
     /**
@@ -706,7 +765,7 @@ class Routing
                 // Save to cache if enabled
                 if ($this->cacheEnabled) {
                     try {
-                        $this->cache->save($this->routes);
+                        $this->cache->save($this->routes, $this->routesDirectory);
                     } catch (Throwable) {
                         // Cache save failed, continue without caching
                     }
@@ -769,7 +828,6 @@ class Routing
         }
 
         return array_any($this->allowedDomains, fn($allowedDomain) => $this->matchDomain($allowedDomain, $host) !== false);
-
     }
 
     /**
@@ -791,33 +849,45 @@ class Routing
             return false;
         }
 
-        // Convert domain pattern to regex
-        // {account}.example.com -> ^(?P<account>[^.]+)\.example\.com$
-        // First replace parameters with placeholders, then quote, then replace placeholders with regex
-        $paramMap = [];
-        $paramIndex = 0;
-        
-        // Extract parameters and replace with placeholders
-        $patternWithPlaceholders = preg_replace_callback(
-            '/\{([a-zA-Z_]\w*)}/',
-            static function ($matches) use (&$paramMap, &$paramIndex) {
-                $placeholder = '___PARAM_%s___';
-                $key = sprintf($placeholder, $paramIndex++);
-                $paramMap[$key] = $matches[1];
-                return $key;
-            },
-            $pattern
-        );
-        
-        // Quote the pattern (now placeholders are safe)
-        $quotedPattern = preg_quote($patternWithPlaceholders, '/');
-        
-        // Replace placeholders with regex patterns
-        foreach ($paramMap as $key => $paramName) {
-            $quotedPattern = str_replace($key, '(?P<' . $paramName . '>[^.]+)', $quotedPattern);
+        // Check cache for compiled regex
+        if (!isset($this->domainRegexCache[$pattern])) {
+            // Convert domain pattern to regex
+            // {account}.example.com -> ^(?P<account>[^.]+)\.example\.com$
+            // First replace parameters with placeholders, then quote, then replace placeholders with regex
+            $paramMap = [];
+            $paramIndex = 0;
+            
+            // Extract parameters and replace with placeholders
+            $patternWithPlaceholders = preg_replace_callback(
+                '/\{([a-zA-Z_]\w*)}/',
+                static function ($matches) use (&$paramMap, &$paramIndex) {
+                    $placeholder = '___PARAM_%s___';
+                    $key = sprintf($placeholder, $paramIndex++);
+                    $paramMap[$key] = $matches[1];
+                    return $key;
+                },
+                $pattern
+            );
+            
+            // Quote the pattern (now placeholders are safe)
+            $quotedPattern = preg_quote($patternWithPlaceholders, '/');
+            
+            // Replace placeholders with regex patterns
+            foreach ($paramMap as $key => $paramName) {
+                $quotedPattern = str_replace($key, '(?P<' . $paramName . '>[^.]+)', $quotedPattern);
+            }
+            
+            $regex = '/^' . $quotedPattern . '$/i';
+            
+            // Cache the compiled regex and param map
+            $this->domainRegexCache[$pattern] = [
+                'regex' => $regex,
+                'paramMap' => $paramMap,
+            ];
         }
-        
-        $regex = '/^' . $quotedPattern . '$/i';
+
+        $cached = $this->domainRegexCache[$pattern];
+        $regex = $cached['regex'];
 
         if (preg_match($regex, $host, $matches)) {
             // Extract named parameters

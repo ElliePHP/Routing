@@ -136,8 +136,7 @@ class ApiVersionMiddleware implements MiddlewareInterface
         ServerRequestInterface $request,
         RequestHandlerInterface $handler
     ): ResponseInterface {
-        $response = $handler->handle($request);
-        return $response->withHeader('X-API-Version', '1.0.0');
+        return $handler->handle($request)->withHeader('X-API-Version', '1.0.0');
     }
 }
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ElliePHP\Components\Routing\Core;
 
 use Throwable;

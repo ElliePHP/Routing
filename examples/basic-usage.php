@@ -41,7 +41,7 @@ Router::group(['prefix' => '/api'], static function () {
         ];
     });
 
-    Router::post('/users', function ($request) {
+    Router::post('/users', static function () {
         return [
             'message' => 'User created',
             'user' => ['id' => 3, 'name' => 'New User']
