@@ -49,6 +49,7 @@ final class Router
         'error_formatter' => null,
         'enforce_domain' => false,
         'allowed_domains' => [],
+        'global_middleware' => [],
     ];
 
     /**
@@ -62,6 +63,7 @@ final class Router
      *   - error_formatter: Custom error formatter instance
      *   - enforce_domain: Reject requests from domains not in allowed_domains
      *   - allowed_domains: Array of allowed domains (supports patterns like {tenant}.example.com)
+     *   - global_middleware: Array of middleware classes to apply to all routes
      * 
      * @throws RouterException
      */
@@ -97,7 +99,8 @@ final class Router
                 self::$config['cache_directory'],
                 self::$config['error_formatter'],
                 self::$config['enforce_domain'],
-                self::$config['allowed_domains']
+                self::$config['allowed_domains'],
+                self::$config['global_middleware']
             );
         }
 

@@ -44,6 +44,7 @@ class Routing
     private array $domainRegexCache = [];
     private ?int $routesHash = null;
     private array $reflectionCache = [];
+    private array $globalMiddleware = [];
 
     public function __construct(
         ?string $routes_directory = '/',
@@ -52,7 +53,8 @@ class Routing
         ?string $cacheDirectory = null,
         ?ErrorFormatterInterface $errorFormatter = null,
         bool $enforceDomain = false,
-        array $allowedDomains = []
+        array $allowedDomains = [],
+        array $globalMiddleware = []
     ) {
         $factory = new Psr17Factory();
         $this->responseFactory = $factory;
@@ -65,6 +67,7 @@ class Routing
         $this->errorFormatter = $errorFormatter ?? new ErrorFormatter();
         $this->enforceDomain = $enforceDomain;
         $this->allowedDomains = $allowedDomains;
+        $this->globalMiddleware = $globalMiddleware;
     }
 
     /**
@@ -446,7 +449,11 @@ class Routing
             }
         }
 
-        $middlewares = $route["middleware"] ?? [];
+        $routeMiddlewares = $route["middleware"] ?? [];
+        
+        // Merge global middleware with route-specific middleware
+        // Global middleware executes first (outer layer), then route middleware (inner layer)
+        $middlewares = array_merge($this->globalMiddleware, $routeMiddlewares);
 
         // Create the final handler for the route
         $finalHandler = new CallableRequestHandler(
@@ -454,6 +461,7 @@ class Routing
         );
 
         // Process middleware stack in reverse order (PSR-15 style)
+        // This ensures global middleware wraps around route middleware
         $handler = $finalHandler;
         foreach (array_reverse($middlewares) as $middlewareDefinition) {
             try {

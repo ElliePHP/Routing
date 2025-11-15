@@ -730,6 +730,98 @@ Router::get('/custom', [CustomController::class, 'index'], [
 ]);
 ```
 
+#### Global Middleware
+
+Apply middleware to all routes automatically by configuring global middleware:
+
+```php
+use App\Middleware\RequestIdMiddleware;
+use App\Middleware\LoggingMiddleware;
+use App\Middleware\CorsMiddleware;
+
+Router::configure([
+    'global_middleware' => [
+        RequestIdMiddleware::class,  // Runs on every request
+        LoggingMiddleware::class,    // Runs on every request
+        CorsMiddleware::class,       // Runs on every request
+    ],
+]);
+
+// All routes automatically have global middleware applied
+Router::get('/users', [UserController::class, 'index']);
+Router::get('/posts', [PostController::class, 'index']);
+```
+
+**Execution Order with Global Middleware:**
+
+```php
+Router::configure([
+    'global_middleware' => [
+        GlobalMiddleware1::class,
+        GlobalMiddleware2::class,
+    ],
+]);
+
+Router::get('/test', $handler, [
+    'middleware' => [
+        RouteMiddleware1::class,
+        RouteMiddleware2::class,
+    ]
+]);
+
+// Execution order:
+// 1. GlobalMiddleware1 (before)
+// 2. GlobalMiddleware2 (before)
+// 3. RouteMiddleware1 (before)
+// 4. RouteMiddleware2 (before)
+// 5. Handler executes
+// 6. RouteMiddleware2 (after)
+// 7. RouteMiddleware1 (after)
+// 8. GlobalMiddleware2 (after)
+// 9. GlobalMiddleware1 (after)
+```
+
+**Framework Integration Example:**
+
+```php
+final class HttpApplication
+{
+    private function globalMiddlewares(): array
+    {
+        return [
+            RequestIdMiddleware::class,
+            LoggingMiddleware::class,
+            CorsMiddleware::class,
+        ];
+    }
+    
+    public function boot(): void
+    {
+        Router::configure([
+            'debug_mode' => false,
+            'cache_enabled' => true,
+            'routes_directory' => __DIR__ . '/routes',
+            'global_middleware' => $this->globalMiddlewares(),
+        ]);
+        
+        $request = ServerRequestFactory::fromGlobals();
+        $response = Router::handle($request);
+        
+        // Emit response...
+    }
+}
+```
+
+**Common Global Middleware Use Cases:**
+
+- **Request ID Tracking**: Add unique IDs to all requests
+- **Logging**: Log all incoming requests and responses
+- **CORS**: Apply CORS headers to all API responses
+- **Security Headers**: Add security headers to all responses
+- **Rate Limiting**: Apply rate limiting to all endpoints
+- **Authentication**: Check authentication on all routes (with exceptions)
+- **Request/Response Transformation**: Modify all requests/responses
+
 #### Middleware Execution Order
 
 ```php
@@ -801,6 +893,13 @@ Router::configure([
         'example.com',
         'api.example.com',
         '{tenant}.example.com'
+    ],
+    
+    // Global middleware applied to all routes (default: [])
+    'global_middleware' => [
+        RequestIdMiddleware::class,
+        LoggingMiddleware::class,
+        CorsMiddleware::class,
     ],
 ]);
 ```
