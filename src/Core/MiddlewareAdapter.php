@@ -6,6 +6,7 @@ namespace ElliePHP\Components\Routing\Core;
 
 use Closure;
 use InvalidArgumentException;
+use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -13,6 +14,10 @@ use Psr\Http\Server\RequestHandlerInterface;
 
 readonly class MiddlewareAdapter
 {
+    public function __construct(
+        private ?ContainerInterface $container = null
+    ) {}
+
     /**
      * Convert various middleware types to PSR-15 compatible format
      */
@@ -36,7 +41,13 @@ readonly class MiddlewareAdapter
         }
 
         if (is_string($middleware) && class_exists($middleware)) {
-            $instance = new $middleware();
+            // Try to resolve from container first
+            if ($this->container !== null && $this->container->has($middleware)) {
+                $instance = $this->container->get($middleware);
+            } else {
+                $instance = new $middleware();
+            }
+            
             if ($instance instanceof MiddlewareInterface) {
                 return $instance;
             }

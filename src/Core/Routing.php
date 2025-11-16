@@ -12,6 +12,7 @@ use FastRoute\Dispatcher;
 use FastRoute\RouteCollector;
 use JsonException;
 use Nyholm\Psr7\Factory\Psr17Factory;
+use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -45,6 +46,7 @@ class Routing
     private ?int $routesHash = null;
     private array $reflectionCache = [];
     private array $globalMiddleware = [];
+    private ?ContainerInterface $container = null;
 
     public function __construct(
         ?string $routes_directory = '/',
@@ -54,7 +56,8 @@ class Routing
         ?ErrorFormatterInterface $errorFormatter = null,
         bool $enforceDomain = false,
         array $allowedDomains = [],
-        array $globalMiddleware = []
+        array $globalMiddleware = [],
+        ?ContainerInterface $container = null
     ) {
         $factory = new Psr17Factory();
         $this->responseFactory = $factory;
@@ -68,6 +71,7 @@ class Routing
         $this->enforceDomain = $enforceDomain;
         $this->allowedDomains = $allowedDomains;
         $this->globalMiddleware = $globalMiddleware;
+        $this->container = $container;
     }
 
     /**
@@ -465,7 +469,7 @@ class Routing
         $handler = $finalHandler;
         foreach (array_reverse($middlewares) as $middlewareDefinition) {
             try {
-                $middleware = (new MiddlewareAdapter)->adapt($middlewareDefinition);
+                $middleware = new MiddlewareAdapter($this->container)->adapt($middlewareDefinition);
                 $handler = new MiddlewareHandler($middleware, $handler);
             } catch (Throwable $e) {
                 throw new MiddlewareNotFoundException(
@@ -515,7 +519,9 @@ class Routing
 
         $paramMetadata = $this->reflectionCache[$cacheKey];
         $args = $this->matchParametersFast($paramMetadata, $params, $request);
-        $controller = new $class();
+        
+        // Resolve controller from container if available
+        $controller = $this->resolveController($class);
 
         $result = $controller->$method(...$args);
         return $result instanceof ResponseInterface
@@ -907,6 +913,18 @@ class Routing
                 $route['domain'] ?? null
             );
         }
+    }
+
+    /**
+     * Resolve controller instance from container or create new instance
+     */
+    private function resolveController(string $class): object
+    {
+        if ($this->container !== null && $this->container->has($class)) {
+            return $this->container->get($class);
+        }
+        
+        return new $class();
     }
 
     /**

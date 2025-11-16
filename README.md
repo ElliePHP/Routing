@@ -838,6 +838,110 @@ Router::get('/test', $handler, [
 ]);
 ```
 
+## Dependency Injection (PSR-11)
+
+The router supports PSR-11 containers for automatic dependency injection of controllers and middleware.
+
+### Basic Container Setup
+
+```php
+use Psr\Container\ContainerInterface;
+
+// Configure router with your PSR-11 container
+Router::configure([
+    'container' => $container, // Any PSR-11 compatible container
+]);
+```
+
+### Controller Dependency Injection
+
+```php
+class UserRepository
+{
+    public function findById(int $id): array
+    {
+        // Database logic here
+        return ['id' => $id, 'name' => 'John Doe'];
+    }
+}
+
+class UserController
+{
+    // Dependencies injected via constructor
+    public function __construct(
+        private UserRepository $userRepository
+    ) {}
+
+    public function show(ServerRequestInterface $request, array $params): array
+    {
+        $user = $this->userRepository->findById((int) $params['id']);
+        return ['user' => $user];
+    }
+}
+
+// Register services in your container
+$container->set(UserRepository::class, fn() => new UserRepository());
+$container->set(UserController::class, fn($c) => 
+    new UserController($c->get(UserRepository::class))
+);
+
+// Router will resolve UserController from container
+Router::get('/users/{id}', [UserController::class, 'show']);
+```
+
+### Middleware Dependency Injection
+
+```php
+class LoggingMiddleware implements MiddlewareInterface
+{
+    public function __construct(
+        private LoggerInterface $logger
+    ) {}
+
+    public function process(
+        ServerRequestInterface $request,
+        RequestHandlerInterface $handler
+    ): ResponseInterface {
+        $this->logger->info('Request received', [
+            'method' => $request->getMethod(),
+            'uri' => (string) $request->getUri()
+        ]);
+        
+        return $handler->handle($request);
+    }
+}
+
+// Register in container
+$container->set(LoggerInterface::class, fn() => new Logger());
+$container->set(LoggingMiddleware::class, fn($c) => 
+    new LoggingMiddleware($c->get(LoggerInterface::class))
+);
+
+// Router will resolve middleware from container
+Router::get('/api/users', $handler, [
+    'middleware' => [LoggingMiddleware::class]
+]);
+```
+
+### Fallback Behavior
+
+If a controller or middleware class is not found in the container, the router will automatically instantiate it using `new ClassName()`. This allows you to:
+
+- Use the container only for classes that need dependencies
+- Mix container-resolved and simple classes
+- Gradually adopt dependency injection
+
+### Popular Container Libraries
+
+The router works with any PSR-11 compatible container:
+
+- **PHP-DI**: `composer require php-di/php-di`
+- **Symfony DependencyInjection**: `composer require symfony/dependency-injection`
+- **Laravel Container**: `composer require illuminate/container`
+- **Pimple**: `composer require pimple/pimple`
+
+See `examples/container-example.php` for a complete working example.
+
 ## Configuration
 
 ### Development Configuration
@@ -901,6 +1005,9 @@ Router::configure([
         LoggingMiddleware::class,
         CorsMiddleware::class,
     ],
+    
+    // PSR-11 container for dependency injection (default: null)
+    'container' => $container,
 ]);
 ```
 

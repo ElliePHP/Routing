@@ -4,6 +4,7 @@ namespace ElliePHP\Components\Routing;
 
 use ElliePHP\Components\Routing\Core\Routing as EllieRouter;
 use ElliePHP\Components\Routing\Exceptions\RouterException;
+use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -50,6 +51,7 @@ final class Router
         'enforce_domain' => false,
         'allowed_domains' => [],
         'global_middleware' => [],
+        'container' => null,
     ];
 
     /**
@@ -64,6 +66,7 @@ final class Router
      *   - enforce_domain: Reject requests from domains not in allowed_domains
      *   - allowed_domains: Array of allowed domains (supports patterns like {tenant}.example.com)
      *   - global_middleware: Array of middleware classes to apply to all routes
+     *   - container: PSR-11 container for dependency injection
      * 
      * @throws RouterException
      */
@@ -100,7 +103,8 @@ final class Router
                 self::$config['error_formatter'],
                 self::$config['enforce_domain'],
                 self::$config['allowed_domains'],
-                self::$config['global_middleware']
+                self::$config['global_middleware'],
+                self::$config['container']
             );
         }
 
@@ -113,6 +117,17 @@ final class Router
     public static function resetInstance(): void
     {
         self::$instance = null;
+        self::$config = [
+            'routes_directory' => '/',
+            'debug_mode' => false,
+            'cache_enabled' => false,
+            'cache_directory' => null,
+            'error_formatter' => null,
+            'enforce_domain' => false,
+            'allowed_domains' => [],
+            'global_middleware' => [],
+            'container' => null,
+        ];
     }
 
     /**
@@ -121,7 +136,7 @@ final class Router
      * This magic method is the core of the facade. Any static call to this
      * class (e.g., Router::get(...)) will be passed to the RouterLibrary instance.
      *
-     * @param string $method The name of the method being called.
+     * @param string $method The name of the method being callednks..
      * @param array $parameters The parameters passed to the method.
      * @return mixed
      * @throws RouterException
