@@ -8,6 +8,7 @@ This directory contains working examples demonstrating various features of the E
 php examples/basic-usage.php
 php examples/controller-example.php
 php examples/middleware-example.php
+php examples/fluent-api-example.php
 php examples/domain-routing.php
 php examples/non-facade-usage.php
 php examples/complete-application.php
@@ -40,8 +41,24 @@ Explores middleware functionality:
 - Group middleware
 - Closure middleware
 - Middleware execution order
+- Fluent syntax for middleware
 
 **Key concepts**: PSR-15, middleware stack, request/response modification
+
+### fluent-api-example.php
+Demonstrates the fluent method chaining API:
+- Fluent route configuration with chaining
+- Fluent group configuration
+- Starting groups with different methods (prefix, middleware, domain, name)
+- Configuration order independence
+- Multiple middleware calls (merging)
+- Nested groups with fluent syntax
+- Multi-tenant routing with fluent API
+- Mixed array and fluent syntax usage
+- Real-world API structure examples
+- Progressive/conditional configuration
+
+**Key concepts**: Method chaining, fluent API, expressive syntax, IDE autocomplete
 
 ### domain-routing.php
 Demonstrates domain-based routing:

@@ -40,18 +40,15 @@ class ErrorFormatter implements ErrorFormatterInterface
      */
     private function getErrorMessage(Throwable $e, bool $debugMode): string
     {
-        // In debug mode, always show the actual message
         if ($debugMode) {
             return $e->getMessage();
         }
 
-        // In production, show user-friendly messages for known exceptions
         if ($e instanceof RouteNotFoundException) {
-            return $e->getMessage(); // "Route not found: GET /path"
+            return $e->getMessage();
         }
 
         if ($e instanceof RouterException) {
-            // For router exceptions, show the message if it's a client error (4xx)
             $code = $e->getCode();
             if ($code >= 400 && $code < 500) {
                 return $e->getMessage();

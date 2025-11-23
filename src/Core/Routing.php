@@ -12,7 +12,9 @@ use FastRoute\Dispatcher;
 use FastRoute\RouteCollector;
 use JsonException;
 use Nyholm\Psr7\Factory\Psr17Factory;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -45,8 +47,8 @@ class Routing
     private array $domainRegexCache = [];
     private ?int $routesHash = null;
     private array $reflectionCache = [];
-    private array $globalMiddleware = [];
-    private ?ContainerInterface $container = null;
+    private array $globalMiddleware;
+    private ?ContainerInterface $container;
 
     public function __construct(
         ?string $routes_directory = '/',
@@ -418,16 +420,16 @@ class Routing
 
         return match ($status) {
             Dispatcher::NOT_FOUND => throw new RouteNotFoundException(
-                "Route not found: {$method} {$uri}",
+                "Route not found: $method $uri",
                 404
             ),
             Dispatcher::METHOD_NOT_ALLOWED => throw new RouterException(
-                "Method {$method} not allowed for route: {$uri}",
+                "Method $method not allowed for route: $uri",
                 405
             ),
             Dispatcher::FOUND => $this->handleFoundRoute($request, $result[1], $result[2], $host),
             default => throw new RouterException(
-                "Unexpected dispatcher status: {$status}. This indicates a bug in FastRoute integration.",
+                "Unexpected dispatcher status: $status. This indicates a bug in FastRoute integration.",
                 500
             ),
         };
@@ -721,14 +723,63 @@ class Routing
     // Helper methods for route definition
     
     /**
+     * Create a PendingGroup with a prefix
+     * 
+     * @param string $prefix URL prefix for the group
+     * @return PendingGroup
+     */
+    public function prefix(string $prefix): PendingGroup
+    {
+        return new PendingGroup($this, ['prefix' => $prefix]);
+    }
+
+    /**
+     * Create a PendingGroup with middleware
+     * 
+     * @param array $middleware Middleware array
+     * @return PendingGroup
+     */
+    public function middleware(array $middleware): PendingGroup
+    {
+        return new PendingGroup($this, ['middleware' => $middleware]);
+    }
+
+    /**
+     * Create a PendingGroup with a domain constraint
+     * 
+     * @param string $domain Domain pattern
+     * @return PendingGroup
+     */
+    public function domain(string $domain): PendingGroup
+    {
+        return new PendingGroup($this, ['domain' => $domain]);
+    }
+
+    /**
+     * Create a PendingGroup with a name prefix
+     * 
+     * @param string $name Name prefix
+     * @return PendingGroup
+     */
+    public function name(string $name): PendingGroup
+    {
+        return new PendingGroup($this, ['name' => $name]);
+    }
+
+    /**
      * Register a GET route
      * 
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
+     * @return PendingRoute|void Returns PendingRoute for fluent chaining when options is empty
      */
-    public function get(string $url, callable|string|array $handler, array $options = []): void
+    public function get(string $url, callable|string|array $handler, array $options = []): PendingRoute|null
     {
+        if (empty($options)) {
+            return new PendingRoute($this, 'GET', $url, $handler);
+        }
+        
         $this->addRoute('GET', $url,
             $options['class'] ?? '',
             $handler,
@@ -736,6 +787,8 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
+        
+        return null;
     }
 
     /**
@@ -744,9 +797,14 @@ class Routing
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
+     * @return PendingRoute|void Returns PendingRoute for fluent chaining when options is empty
      */
-    public function post(string $url, callable|string|array $handler, array $options = []): void
+    public function post(string $url, callable|string|array $handler, array $options = []): PendingRoute|null
     {
+        if (empty($options)) {
+            return new PendingRoute($this, 'POST', $url, $handler);
+        }
+        
         $this->addRoute('POST', $url,
             $options['class'] ?? '',
             $handler,
@@ -754,6 +812,8 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
+        
+        return null;
     }
 
     /**
@@ -762,9 +822,14 @@ class Routing
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
+     * @return PendingRoute|void Returns PendingRoute for fluent chaining when options is empty
      */
-    public function put(string $url, callable|string|array $handler, array $options = []): void
+    public function put(string $url, callable|string|array $handler, array $options = []): PendingRoute|null
     {
+        if (empty($options)) {
+            return new PendingRoute($this, 'PUT', $url, $handler);
+        }
+        
         $this->addRoute('PUT', $url,
             $options['class'] ?? '',
             $handler,
@@ -772,6 +837,8 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
+        
+        return null;
     }
 
     /**
@@ -780,9 +847,14 @@ class Routing
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
+     * @return PendingRoute|void Returns PendingRoute for fluent chaining when options is empty
      */
-    public function delete(string $url, callable|string|array $handler, array $options = []): void
+    public function delete(string $url, callable|string|array $handler, array $options = []): PendingRoute|null
     {
+        if (empty($options)) {
+            return new PendingRoute($this, 'DELETE', $url, $handler);
+        }
+        
         $this->addRoute('DELETE', $url,
             $options['class'] ?? '',
             $handler,
@@ -790,6 +862,8 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
+        
+        return null;
     }
 
     /**
@@ -798,9 +872,14 @@ class Routing
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
+     * @return PendingRoute|void Returns PendingRoute for fluent chaining when options is empty
      */
-    public function patch(string $url, callable|string|array $handler, array $options = []): void
+    public function patch(string $url, callable|string|array $handler, array $options = []): PendingRoute|null
     {
+        if (empty($options)) {
+            return new PendingRoute($this, 'PATCH', $url, $handler);
+        }
+        
         $this->addRoute('PATCH', $url,
             $options['class'] ?? '',
             $handler,
@@ -808,6 +887,8 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
+        
+        return null;
     }
 
     // Reset router state (useful for testing)
@@ -921,7 +1002,11 @@ class Routing
     private function resolveController(string $class): object
     {
         if ($this->container !== null && $this->container->has($class)) {
-            return $this->container->get($class);
+            try {
+                return $this->container->get($class);
+            } catch (NotFoundExceptionInterface|ContainerExceptionInterface) {
+
+            }
         }
         
         return new $class();

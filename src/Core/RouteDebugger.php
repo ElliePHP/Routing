@@ -104,7 +104,7 @@ class RouteDebugger
     public function getTimingInfo(float $startTime): array
     {
         $endTime = microtime(true);
-        $duration = ($endTime - $startTime) * 1000; // Convert to milliseconds
+        $duration = ($endTime - $startTime) * 1000;
 
         return [
             'start' => $startTime,

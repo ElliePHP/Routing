@@ -41,14 +41,20 @@ class CustomHeaderMiddleware implements MiddlewareInterface
 // Configure router
 Router::configure(['debug_mode' => true]);
 
-// Route with middleware
+// Route with middleware - Array syntax
 Router::get('/protected', function () {
     return ['message' => 'This route has middleware'];
 }, [
     'middleware' => [TimingMiddleware::class, CustomHeaderMiddleware::class]
 ]);
 
-// Group with middleware
+// Route with middleware - Fluent syntax (alternative)
+Router::get('/protected-fluent', function () {
+    return ['message' => 'This route has middleware (fluent syntax)'];
+})
+    ->middleware([TimingMiddleware::class, CustomHeaderMiddleware::class]);
+
+// Group with middleware - Array syntax
 Router::group(['prefix' => '/api', 'middleware' => [TimingMiddleware::class]], function () {
     Router::get('/users', function () {
         return ['users' => []];
@@ -60,6 +66,20 @@ Router::group(['prefix' => '/api', 'middleware' => [TimingMiddleware::class]], f
         'middleware' => [CustomHeaderMiddleware::class] // Additional middleware
     ]);
 });
+
+// Group with middleware - Fluent syntax (alternative)
+Router::prefix('/api-fluent')
+    ->middleware([TimingMiddleware::class])
+    ->group(function () {
+        Router::get('/users', function () {
+            return ['users' => []];
+        });
+        
+        Router::get('/posts', function () {
+            return ['posts' => []];
+        })
+            ->middleware([CustomHeaderMiddleware::class]); // Additional middleware
+    });
 
 // Closure middleware
 Router::get('/custom', function () {

@@ -2,9 +2,11 @@
 
 namespace ElliePHP\Components\Routing;
 
+use Closure;
+use ElliePHP\Components\Routing\Core\PendingGroup;
+use ElliePHP\Components\Routing\Core\PendingRoute;
 use ElliePHP\Components\Routing\Core\Routing as EllieRouter;
 use ElliePHP\Components\Routing\Exceptions\RouterException;
-use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -15,11 +17,15 @@ use Psr\Http\Message\ServerRequestInterface;
  * 
  * @mixin EllieRouter
  * 
- * @method static void get(string $url, \Closure|callable|string|array $handler, array $options = []) Register a GET route
- * @method static void post(string $url, \Closure|callable|string|array $handler, array $options = []) Register a POST route
- * @method static void put(string $url, \Closure|callable|string|array $handler, array $options = []) Register a PUT route
- * @method static void delete(string $url, \Closure|callable|string|array $handler, array $options = []) Register a DELETE route
- * @method static void patch(string $url, \Closure|callable|string|array $handler, array $options = []) Register a PATCH route
+ * @method static PendingRoute|null get(string $url, Closure|callable|string|array $handler, array $options = []) Register a GET route
+ * @method static PendingRoute|null post(string $url, Closure|callable|string|array $handler, array $options = []) Register a POST route
+ * @method static PendingRoute|null put(string $url, Closure|callable|string|array $handler, array $options = []) Register a PUT route
+ * @method static PendingRoute|null delete(string $url, Closure|callable|string|array $handler, array $options = []) Register a DELETE route
+ * @method static PendingRoute|null patch(string $url, Closure|callable|string|array $handler, array $options = []) Register a PATCH route
+ * @method static PendingGroup prefix(string $prefix) Create a PendingGroup with a prefix
+ * @method static PendingGroup middleware(array $middleware) Create a PendingGroup with middleware
+ * @method static PendingGroup domain(string $domain) Create a PendingGroup with a domain constraint
+ * @method static PendingGroup name(string $name) Create a PendingGroup with a name prefix
  * @method static void group(array $options, callable $callback) Create a route group
  * @method static ResponseInterface handle(ServerRequestInterface $request) Handle an incoming request
  * @method static void reset() Reset router state
@@ -30,7 +36,7 @@ use Psr\Http\Message\ServerRequestInterface;
  * @method static bool isDebugMode() Check if debug mode is enabled
  * @method static bool isCacheEnabled() Check if cache is enabled
  * @method static void registerRoutes(array $routes) Register routes from array
- * @method static void addRoute(string $method, string $url, string $class = "", \Closure|callable|string|array|null $handler = null, array $middleware = [], ?string $name = null) Register a route with the router
+ * @method static void addRoute(string $method, string $url, string $class = "", Closure|callable|string|array|null $handler = null, array $middleware = [], ?string $name = null) Register a route with the router
  */
 final class Router
 {
@@ -78,7 +84,7 @@ final class Router
         
         // Security: Warn if debug mode is enabled
         if (isset($config['debug_mode']) && $config['debug_mode'] === true) {
-            if (getenv('APP_ENV') === 'production' || (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production')) {
+            if ((isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') || getenv('APP_ENV') === 'production') {
                 trigger_error(
                     'WARNING: Debug mode is enabled in production environment. This exposes sensitive information.',
                     E_USER_WARNING

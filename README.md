@@ -128,6 +128,435 @@ Router::patch('/users/{id}', [UserController::class, 'patch']);
 Router::delete('/users/{id}', [UserController::class, 'destroy']);
 ```
 
+### Fluent API (Method Chaining)
+
+The router supports a fluent API that allows you to chain configuration methods for a more expressive and readable syntax. This is an alternative to the traditional array-based configuration.
+
+#### Why Use the Fluent API?
+
+**Benefits:**
+- **More Readable**: Method chaining reads like natural language
+- **IDE Autocomplete**: Better type hints and autocomplete support
+- **Less Verbose**: No need for array keys and brackets
+- **Flexible**: Chain methods in any order
+- **Backward Compatible**: Works alongside existing array syntax
+
+#### Fluent Route Configuration
+
+Chain configuration methods directly on route definitions:
+
+```php
+// Fluent syntax - clean and expressive
+Router::get('/users', [UserController::class, 'index'])
+    ->middleware([AuthMiddleware::class])
+    ->name('users.index')
+    ->domain('api.example.com');
+
+// Equivalent array syntax (still supported)
+Router::get('/users', [UserController::class, 'index'], [
+    'middleware' => [AuthMiddleware::class],
+    'name' => 'users.index',
+    'domain' => 'api.example.com'
+]);
+```
+
+**Available Chainable Methods:**
+- `->middleware(array $middleware)` - Add middleware to the route
+- `->name(string $name)` - Set route name
+- `->domain(string $domain)` - Set domain constraint
+
+#### Fluent Group Configuration
+
+Start group definitions with any configuration method:
+
+```php
+// Start with prefix
+Router::prefix('/api/v1')
+    ->middleware([ApiMiddleware::class])
+    ->domain('api.example.com')
+    ->group(function() {
+        Router::get('/users', [UserController::class, 'index']);
+        Router::post('/users', [UserController::class, 'store']);
+    });
+
+// Start with middleware
+Router::middleware([AuthMiddleware::class])
+    ->prefix('/admin')
+    ->name('admin')
+    ->group(function() {
+        Router::get('/dashboard', [AdminController::class, 'dashboard']);
+    });
+
+// Start with domain
+Router::domain('{tenant}.example.com')
+    ->prefix('/api')
+    ->middleware([TenantMiddleware::class])
+    ->group(function() {
+        Router::get('/dashboard', function($request, $params) {
+            return ['tenant' => $params['tenant']];
+        });
+    });
+
+// Start with name prefix
+Router::name('api.v1')
+    ->prefix('/api/v1')
+    ->group(function() {
+        Router::get('/users', [UserController::class, 'index'])
+            ->name('users'); // Full name: api.v1.users
+    });
+```
+
+#### Comparison: Array vs Fluent Syntax
+
+| Feature | Array Syntax | Fluent Syntax |
+|---------|-------------|---------------|
+| **Single Route** | `Router::get($url, $handler, ['middleware' => [...]])` | `Router::get($url, $handler)->middleware([...])` |
+| **Multiple Options** | `Router::get($url, $handler, ['middleware' => [...], 'name' => '...', 'domain' => '...'])` | `Router::get($url, $handler)->middleware([...])->name('...')->domain('...')` |
+| **Route Groups** | `Router::group(['prefix' => '...', 'middleware' => [...]], $callback)` | `Router::prefix('...')->middleware([...])->group($callback)` |
+| **Readability** | Requires array keys | Reads like natural language |
+| **IDE Support** | Limited autocomplete | Full autocomplete and type hints |
+| **Flexibility** | Fixed structure | Chain in any order |
+
+#### Real-World Examples
+
+**Example 1: API Routes with Authentication**
+
+```php
+// Array syntax
+Router::group([
+    'prefix' => '/api/v1',
+    'middleware' => [ApiMiddleware::class, RateLimitMiddleware::class],
+    'domain' => 'api.example.com'
+], function() {
+    Router::get('/users', [UserController::class, 'index'], [
+        'middleware' => [AuthMiddleware::class],
+        'name' => 'api.users.index'
+    ]);
+});
+
+// Fluent syntax - more readable
+Router::prefix('/api/v1')
+    ->middleware([ApiMiddleware::class, RateLimitMiddleware::class])
+    ->domain('api.example.com')
+    ->group(function() {
+        Router::get('/users', [UserController::class, 'index'])
+            ->middleware([AuthMiddleware::class])
+            ->name('api.users.index');
+    });
+```
+
+**Example 2: Multi-Tenant Application**
+
+```php
+// Array syntax
+Router::group([
+    'domain' => '{tenant}.example.com',
+    'middleware' => [TenantMiddleware::class]
+], function() {
+    Router::get('/dashboard', [DashboardController::class, 'index'], [
+        'middleware' => [AuthMiddleware::class],
+        'name' => 'dashboard'
+    ]);
+});
+
+// Fluent syntax - cleaner
+Router::domain('{tenant}.example.com')
+    ->middleware([TenantMiddleware::class])
+    ->group(function() {
+        Router::get('/dashboard', [DashboardController::class, 'index'])
+            ->middleware([AuthMiddleware::class])
+            ->name('dashboard');
+    });
+```
+
+**Example 3: Admin Panel with Multiple Middleware**
+
+```php
+// Array syntax
+Router::group([
+    'prefix' => '/admin',
+    'middleware' => [AuthMiddleware::class, AdminMiddleware::class, AuditMiddleware::class],
+    'name' => 'admin'
+], function() {
+    Router::get('/users', [AdminController::class, 'users'], [
+        'name' => 'users'
+    ]);
+    Router::get('/settings', [AdminController::class, 'settings'], [
+        'name' => 'settings'
+    ]);
+});
+
+// Fluent syntax - more expressive
+Router::prefix('/admin')
+    ->middleware([AuthMiddleware::class, AdminMiddleware::class, AuditMiddleware::class])
+    ->name('admin')
+    ->group(function() {
+        Router::get('/users', [AdminController::class, 'users'])
+            ->name('users');
+        Router::get('/settings', [AdminController::class, 'settings'])
+            ->name('settings');
+    });
+```
+
+#### Migration Guide
+
+**Step 1: Understand Backward Compatibility**
+
+The fluent API is completely backward compatible. You can:
+- Keep using array syntax in existing code
+- Use fluent syntax for new routes
+- Mix both syntaxes in the same application
+- Migrate gradually at your own pace
+
+**Step 2: Start with New Routes**
+
+Begin using fluent syntax for new routes you add:
+
+```php
+// New route with fluent syntax
+Router::get('/api/products', [ProductController::class, 'index'])
+    ->middleware([ApiMiddleware::class])
+    ->name('api.products');
+
+// Existing routes with array syntax still work
+Router::get('/users', [UserController::class, 'index'], [
+    'middleware' => [AuthMiddleware::class]
+]);
+```
+
+**Step 3: Convert Simple Routes First**
+
+Start with routes that have minimal configuration:
+
+```php
+// Before
+Router::get('/profile', [ProfileController::class, 'show'], [
+    'middleware' => [AuthMiddleware::class]
+]);
+
+// After
+Router::get('/profile', [ProfileController::class, 'show'])
+    ->middleware([AuthMiddleware::class]);
+```
+
+**Step 4: Convert Route Groups**
+
+Groups benefit significantly from fluent syntax:
+
+```php
+// Before
+Router::group(['prefix' => '/api', 'middleware' => [ApiMiddleware::class]], function() {
+    // routes...
+});
+
+// After
+Router::prefix('/api')
+    ->middleware([ApiMiddleware::class])
+    ->group(function() {
+        // routes...
+    });
+```
+
+**Step 5: Convert Complex Routes**
+
+Routes with multiple options become much more readable:
+
+```php
+// Before
+Router::get('/admin/reports', [ReportController::class, 'index'], [
+    'middleware' => [AuthMiddleware::class, AdminMiddleware::class],
+    'name' => 'admin.reports',
+    'domain' => 'admin.example.com'
+]);
+
+// After
+Router::get('/admin/reports', [ReportController::class, 'index'])
+    ->middleware([AuthMiddleware::class, AdminMiddleware::class])
+    ->name('admin.reports')
+    ->domain('admin.example.com');
+```
+
+**Step 6: Refactor Nested Groups**
+
+Nested groups become clearer with fluent syntax:
+
+```php
+// Before
+Router::group(['prefix' => '/api'], function() {
+    Router::group(['prefix' => '/v1', 'middleware' => [ApiMiddleware::class]], function() {
+        Router::group(['middleware' => [AuthMiddleware::class]], function() {
+            Router::get('/users', [UserController::class, 'index']);
+        });
+    });
+});
+
+// After
+Router::prefix('/api')
+    ->group(function() {
+        Router::prefix('/v1')
+            ->middleware([ApiMiddleware::class])
+            ->group(function() {
+                Router::middleware([AuthMiddleware::class])
+                    ->group(function() {
+                        Router::get('/users', [UserController::class, 'index']);
+                    });
+            });
+    });
+```
+
+#### Advanced Fluent Patterns
+
+**Pattern 1: Configuration Order Independence**
+
+Chain methods in any order that makes sense for your code:
+
+```php
+// All of these are equivalent
+Router::get('/users', $handler)
+    ->middleware([AuthMiddleware::class])
+    ->name('users')
+    ->domain('api.example.com');
+
+Router::get('/users', $handler)
+    ->name('users')
+    ->domain('api.example.com')
+    ->middleware([AuthMiddleware::class]);
+
+Router::get('/users', $handler)
+    ->domain('api.example.com')
+    ->middleware([AuthMiddleware::class])
+    ->name('users');
+```
+
+**Pattern 2: Multiple Middleware Calls**
+
+Calling `middleware()` multiple times merges the arrays:
+
+```php
+Router::get('/admin/users', [AdminController::class, 'users'])
+    ->middleware([AuthMiddleware::class])
+    ->middleware([AdminMiddleware::class])
+    ->middleware([AuditMiddleware::class]);
+
+// Equivalent to:
+Router::get('/admin/users', [AdminController::class, 'users'])
+    ->middleware([
+        AuthMiddleware::class,
+        AdminMiddleware::class,
+        AuditMiddleware::class
+    ]);
+```
+
+**Pattern 3: Progressive Configuration**
+
+Build up configuration conditionally:
+
+```php
+$route = Router::get('/data', [DataController::class, 'index'])
+    ->name('data.index');
+
+if ($requiresAuth) {
+    $route->middleware([AuthMiddleware::class]);
+}
+
+if ($isApiDomain) {
+    $route->domain('api.example.com');
+}
+
+// Route is automatically registered when $route goes out of scope
+```
+
+**Pattern 4: Reusable Group Configurations**
+
+Create reusable group configurations:
+
+```php
+// Define a reusable API group configuration
+function apiGroup(callable $callback): void {
+    Router::prefix('/api/v1')
+        ->middleware([ApiMiddleware::class, RateLimitMiddleware::class])
+        ->domain('api.example.com')
+        ->name('api.v1')
+        ->group($callback);
+}
+
+// Use it multiple times
+apiGroup(function() {
+    Router::get('/users', [UserController::class, 'index'])
+        ->name('users');
+    Router::get('/posts', [PostController::class, 'index'])
+        ->name('posts');
+});
+```
+
+#### Mixed Syntax Usage
+
+You can freely mix array and fluent syntax in the same application:
+
+```php
+// Fluent syntax for new code
+Router::prefix('/api')
+    ->middleware([ApiMiddleware::class])
+    ->group(function() {
+        // Fluent route
+        Router::get('/users', [UserController::class, 'index'])
+            ->name('api.users');
+        
+        // Array syntax route (still works)
+        Router::post('/users', [UserController::class, 'store'], [
+            'middleware' => [ValidationMiddleware::class],
+            'name' => 'api.users.store'
+        ]);
+    });
+
+// Array syntax for existing code
+Router::group(['prefix' => '/admin'], function() {
+    Router::get('/dashboard', [AdminController::class, 'dashboard'], [
+        'middleware' => [AuthMiddleware::class, AdminMiddleware::class]
+    ]);
+});
+```
+
+#### Best Practices
+
+**1. Use Fluent Syntax for New Code**
+
+Adopt fluent syntax for all new routes and groups to benefit from improved readability and IDE support.
+
+**2. Be Consistent Within Files**
+
+While mixing syntaxes is supported, try to be consistent within individual route files for better maintainability.
+
+**3. Leverage IDE Autocomplete**
+
+The fluent API provides excellent IDE support. Let your IDE guide you with autocomplete suggestions.
+
+**4. Chain in Logical Order**
+
+While order doesn't matter functionally, chain methods in a logical order for readability:
+
+```php
+// Recommended order: middleware -> name -> domain
+Router::get('/users', $handler)
+    ->middleware([AuthMiddleware::class])
+    ->name('users.index')
+    ->domain('api.example.com');
+```
+
+**5. Keep Groups Focused**
+
+Use fluent groups to clearly express the shared configuration:
+
+```php
+// Clear intent: all routes in this group are authenticated API endpoints
+Router::prefix('/api')
+    ->middleware([AuthMiddleware::class])
+    ->domain('api.example.com')
+    ->group(function() {
+        // routes...
+    });
+```
+
 #### Route Parameters
 
 ```php

@@ -35,6 +35,7 @@
     "psr/http-server-middleware": "^1.0"
   },
   "require-dev": {
+    "giorgiosironi/eris": "^1.0",
     "phpunit/phpunit": "^11.0"
   },
   "autoload": {

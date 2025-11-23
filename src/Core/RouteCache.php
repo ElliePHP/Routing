@@ -6,6 +6,8 @@ namespace ElliePHP\Components\Routing\Core;
 
 use ElliePHP\Components\Routing\Exceptions\RouterException;
 use JsonException;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use Throwable;
 
 /**
@@ -118,8 +120,8 @@ class RouteCache
         }
 
         $maxMtime = 0;
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($routesDirectory)
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($routesDirectory)
         );
 
         foreach ($iterator as $file) {
