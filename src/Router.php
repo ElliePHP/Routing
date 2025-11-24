@@ -53,7 +53,6 @@ final class Router
         'debug_mode' => false,
         'cache_enabled' => false,
         'cache_directory' => null,
-        'error_formatter' => null,
         'enforce_domain' => false,
         'allowed_domains' => [],
         'global_middleware' => [],
@@ -68,7 +67,6 @@ final class Router
      *   - debug_mode: Enable debug mode with detailed errors and timing
      *   - cache_enabled: Enable route caching for production
      *   - cache_directory: Directory for cache files
-     *   - error_formatter: Custom error formatter instance
      *   - enforce_domain: Reject requests from domains not in allowed_domains
      *   - allowed_domains: Array of allowed domains (supports patterns like {tenant}.example.com)
      *   - global_middleware: Array of middleware classes to apply to all routes
@@ -106,7 +104,6 @@ final class Router
                 self::$config['debug_mode'],
                 self::$config['cache_enabled'],
                 self::$config['cache_directory'],
-                self::$config['error_formatter'],
                 self::$config['enforce_domain'],
                 self::$config['allowed_domains'],
                 self::$config['global_middleware'],
@@ -128,7 +125,6 @@ final class Router
             'debug_mode' => false,
             'cache_enabled' => false,
             'cache_directory' => null,
-            'error_formatter' => null,
             'enforce_domain' => false,
             'allowed_domains' => [],
             'global_middleware' => [],
