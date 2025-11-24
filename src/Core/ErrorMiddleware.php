@@ -6,24 +6,40 @@ namespace ElliePHP\Components\Routing\Core;
 
 use ElliePHP\Components\Routing\Exceptions\RouteNotFoundException;
 use ElliePHP\Components\Routing\Exceptions\RouterException;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 use Throwable;
 
-class ErrorFormatter implements ErrorFormatterInterface
+class ErrorMiddleware extends AbstractErrorMiddleware
 {
-    public function format(Throwable $e, bool $debugMode): array
+    public function __construct(
+        private readonly ResponseFactoryInterface $responseFactory,
+        private readonly StreamFactoryInterface $streamFactory,
+        bool $debugMode = false
+    ) {
+        parent::__construct($debugMode);
+    }
+
+    protected function format(Throwable $e, ServerRequestInterface $request): ResponseInterface
     {
         $status = $e->getCode();
         $status = $status >= 100 && $status < 600 ? $status : 500;
 
+        if ($e instanceof RouteNotFoundException) {
+            $status = 404;
+        }
+
         // Determine error message based on exception type and debug mode
-        $message = $this->getErrorMessage($e, $debugMode);
+        $message = $this->getErrorMessage($e, $this->debugMode);
 
         $data = [
             'error' => $message,
             'status' => $status,
         ];
 
-        if ($debugMode) {
+        if ($this->debugMode) {
             $data['debug'] = [
                 'exception' => get_class($e),
                 'file' => $e->getFile(),
@@ -32,7 +48,12 @@ class ErrorFormatter implements ErrorFormatterInterface
             ];
         }
 
-        return $data;
+        $response = $this->responseFactory
+            ->createResponse($status)
+            ->withHeader("Content-Type", "application/json");
+
+        $stream = $this->streamFactory->createStream(json_encode($data, JSON_THROW_ON_ERROR));
+        return $response->withBody($stream);
     }
 
     /**

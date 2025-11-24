@@ -31,6 +31,74 @@ A minimal, fast routing component for ElliePHP API framework based on FastRoute 
 composer require elliephp/routing
 ```
 
+## ⚠️ Breaking Changes
+
+## ⚠️ Breaking Changes
+
+### Error Handling Architecture Changed
+
+We have moved from **Internal Error Handling** to **Middleware-based Error Handling** to better comply with PSR-15 standards.
+
+**What Changed?**
+- **Previously**: The `Routing` class caught exceptions (like `RouteNotFoundException`) internally and returned a formatted response.
+- **Now**: The `Routing` class **throws** exceptions. It does not catch them.
+- **Action Required**: You must wrap the router with `ErrorMiddleware` (or your own error handler) to catch these exceptions and generate responses.
+
+### Migration Guide
+
+**❌ Before (v1.x):**
+```php
+$router = new Routing(...);
+
+// Router would catch errors and return a 404/500 response
+$response = $router->handle($request);
+```
+
+**✅ After (v2.0):**
+```php
+use ElliePHP\Components\Routing\Core\ErrorMiddleware;
+use ElliePHP\Components\Routing\Core\MiddlewareHandler;
+
+$router = new Routing(...);
+
+// 1. Create the Error Middleware
+// This middleware will catch any exceptions thrown by the router
+$errorMiddleware = new ErrorMiddleware($responseFactory, $streamFactory, $debugMode);
+
+// 2. Wrap the Router with the Middleware
+// The MiddlewareHandler executes the middleware, which then calls the router
+$app = new MiddlewareHandler($errorMiddleware, $router);
+
+// 3. Handle the request using the wrapped handler
+$response = $app->handle($request);
+```
+
+### Custom Error Middleware
+
+You can easily create your own error middleware by extending `ElliePHP\Components\Routing\Core\AbstractErrorMiddleware`:
+
+```php
+use ElliePHP\Components\Routing\Core\AbstractErrorMiddleware;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Throwable;
+
+class MyCustomErrorMiddleware extends AbstractErrorMiddleware
+{
+    protected function format(Throwable $e, ServerRequestInterface $request): ResponseInterface
+    {
+        // Log the error
+        // logger->error($e->getMessage());
+
+        // Return a custom response
+        return new Response(
+            status: 500,
+            body: json_encode(['error' => 'Something went wrong!'])
+        );
+    }
+}
+```
+
 ## Quick Start
 
 ### Basic Setup
@@ -78,6 +146,11 @@ $router = new Routing(
     cacheEnabled: false
 );
 
+// Add error middleware (required for handling exceptions)
+$factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+$errorMiddleware = new \ElliePHP\Components\Routing\Core\ErrorMiddleware($factory, $factory, true);
+$handler = new \ElliePHP\Components\Routing\Core\MiddlewareHandler($errorMiddleware, $router);
+
 // Define routes
 $router->get('/', function() {
     return ['message' => 'Hello World'];
@@ -89,7 +162,7 @@ $router->get('/users/{id}', function($request, $params) {
 
 // Handle request
 $request = new ServerRequest('GET', '/users/42');
-$response = $router->handle($request);
+$response = $handler->handle($request);
 ```
 
 ## Usage Guide

@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 namespace ElliePHP\Components\Routing\Tests;
 
+use ElliePHP\Components\Routing\Core\ErrorMiddleware;
+use ElliePHP\Components\Routing\Core\MiddlewareHandler;
 use ElliePHP\Components\Routing\Core\Routing;
 use ElliePHP\Components\Routing\Exceptions\RouteNotFoundException;
 use ElliePHP\Components\Routing\Exceptions\RouterException;
+use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\ServerRequest;
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Server\RequestHandlerInterface;
 
 class DomainRoutingTest extends TestCase
 {
     private Routing $router;
+    private RequestHandlerInterface $handler;
     private string $tempDir;
 
     protected function setUp(): void
@@ -29,6 +34,10 @@ class DomainRoutingTest extends TestCase
             enforceDomain: false,
             allowedDomains: ['example.com', 'api.example.com', '{tenant}.example.com']
         );
+
+        $factory = new Psr17Factory();
+        $errorMiddleware = new ErrorMiddleware($factory, $factory, true);
+        $this->handler = new MiddlewareHandler($errorMiddleware, $this->router);
     }
 
     protected function tearDown(): void
@@ -49,7 +58,7 @@ class DomainRoutingTest extends TestCase
         }, ['domain' => 'example.com']);
 
         $request = new ServerRequest('GET', 'http://example.com/');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
 
         $this->assertEquals(200, $response->getStatusCode());
         $body = json_decode((string)$response->getBody(), true);
@@ -63,7 +72,7 @@ class DomainRoutingTest extends TestCase
         }, ['domain' => 'api.example.com']);
 
         $request = new ServerRequest('GET', 'http://api.example.com/users');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
 
         $this->assertEquals(200, $response->getStatusCode());
         $body = json_decode((string)$response->getBody(), true);
@@ -77,7 +86,7 @@ class DomainRoutingTest extends TestCase
         }, ['domain' => '{tenant}.example.com']);
 
         $request = new ServerRequest('GET', 'http://acme.example.com/dashboard');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
 
         $this->assertEquals(200, $response->getStatusCode());
         $body = json_decode((string)$response->getBody(), true);
@@ -94,7 +103,7 @@ class DomainRoutingTest extends TestCase
         }, ['domain' => '{tenant}.example.com']);
 
         $request = new ServerRequest('GET', 'http://widgets.example.com/users/42');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
 
         $this->assertEquals(200, $response->getStatusCode());
         $body = json_decode((string)$response->getBody(), true);
@@ -114,11 +123,11 @@ class DomainRoutingTest extends TestCase
         });
 
         $request = new ServerRequest('GET', 'http://admin.example.com/dashboard');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
         $this->assertEquals(200, $response->getStatusCode());
 
         $request = new ServerRequest('GET', 'http://admin.example.com/settings');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
         $this->assertEquals(200, $response->getStatusCode());
     }
 
@@ -129,7 +138,7 @@ class DomainRoutingTest extends TestCase
         }, ['domain' => 'admin.example.com']);
 
         $request = new ServerRequest('GET', 'http://example.com/admin');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
         
         // Should return 404 because domain doesn't match
         $this->assertEquals(404, $response->getStatusCode());
@@ -155,7 +164,12 @@ class DomainRoutingTest extends TestCase
         });
 
         $request = new ServerRequest('GET', 'http://evil.com/');
-        $response = $router->handle($request);
+        
+        $factory = new Psr17Factory();
+        $errorMiddleware = new ErrorMiddleware($factory, $factory, false);
+        $handler = new MiddlewareHandler($errorMiddleware, $router);
+        
+        $response = $handler->handle($request);
         
         // Should return 403 because domain is not allowed
         $this->assertEquals(403, $response->getStatusCode());
@@ -173,11 +187,11 @@ class DomainRoutingTest extends TestCase
 
         // Should work on any domain
         $request1 = new ServerRequest('GET', 'http://example.com/public');
-        $response1 = $this->router->handle($request1);
+        $response1 = $this->handler->handle($request1);
         $this->assertEquals(200, $response1->getStatusCode());
 
         $request2 = new ServerRequest('GET', 'http://api.example.com/public');
-        $response2 = $this->router->handle($request2);
+        $response2 = $this->handler->handle($request2);
         $this->assertEquals(200, $response2->getStatusCode());
     }
 
@@ -192,7 +206,7 @@ class DomainRoutingTest extends TestCase
         });
 
         $request = new ServerRequest('GET', 'http://api.example.com/v1/users');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
 
         $this->assertEquals(200, $response->getStatusCode());
         $body = json_decode((string)$response->getBody(), true);
@@ -209,7 +223,7 @@ class DomainRoutingTest extends TestCase
         }, ['domain' => '{subdomain}.{region}.example.com']);
 
         $request = new ServerRequest('GET', 'http://app.us-east.example.com/');
-        $response = $this->router->handle($request);
+        $response = $this->handler->handle($request);
 
         $this->assertEquals(200, $response->getStatusCode());
         $body = json_decode((string)$response->getBody(), true);

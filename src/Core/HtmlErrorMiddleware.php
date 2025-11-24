@@ -4,16 +4,28 @@ declare(strict_types=1);
 
 namespace ElliePHP\Components\Routing\Core;
 
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 use Throwable;
 
-class HtmlErrorFormatter implements ErrorFormatterInterface
+class HtmlErrorMiddleware extends AbstractErrorMiddleware
 {
-    public function format(Throwable $e, bool $debugMode): array
+    public function __construct(
+        private readonly ResponseFactoryInterface $responseFactory,
+        private readonly StreamFactoryInterface $streamFactory,
+        bool $debugMode = false
+    ) {
+        parent::__construct($debugMode);
+    }
+
+    protected function format(Throwable $e, ServerRequestInterface $request): ResponseInterface
     {
         $status = $e->getCode();
         $status = $status >= 100 && $status < 600 ? $status : 500;
 
-        $message = $debugMode ? $e->getMessage() : 'An unexpected error occurred';
+        $message = $this->debugMode ? $e->getMessage() : 'An unexpected error occurred';
 
         $html = "<!DOCTYPE html>
 <html>
@@ -33,7 +45,7 @@ class HtmlErrorFormatter implements ErrorFormatterInterface
         <h1>Error {$status}</h1>
         <div class='message'>{$message}</div>";
 
-        if ($debugMode) {
+        if ($this->debugMode) {
             $html .= "
         <div class='debug'>
             <strong>Exception:</strong> " . get_class($e) . "<br>
@@ -49,6 +61,10 @@ class HtmlErrorFormatter implements ErrorFormatterInterface
 </body>
 </html>";
 
-        return ['html' => $html, 'status' => $status];
+        $response = $this->responseFactory
+            ->createResponse($status)
+            ->withHeader("Content-Type", "text/html");
+        $stream = $this->streamFactory->createStream($html);
+        return $response->withBody($stream);
     }
 }

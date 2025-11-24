@@ -19,6 +19,7 @@ use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
@@ -27,7 +28,7 @@ use ReflectionNamedType;
 use Throwable;
 use function FastRoute\simpleDispatcher;
 
-class Routing
+class Routing implements RequestHandlerInterface
 {
     private ?Dispatcher $dispatcher = null;
     private array $dispatcherCache = [];
@@ -40,7 +41,6 @@ class Routing
     private readonly bool $cacheEnabled;
     private readonly RouteCache $cache;
     private readonly RouteDebugger $debugger;
-    private readonly ErrorFormatterInterface $errorFormatter;
     private ?float $requestStartTime = null;
     private readonly bool $enforceDomain;
     private readonly array $allowedDomains;
@@ -55,7 +55,6 @@ class Routing
         bool $debugMode = false,
         bool $cacheEnabled = false,
         ?string $cacheDirectory = null,
-        ?ErrorFormatterInterface $errorFormatter = null,
         bool $enforceDomain = false,
         array $allowedDomains = [],
         array $globalMiddleware = [],
@@ -69,7 +68,6 @@ class Routing
         $this->cacheEnabled = $cacheEnabled && !$debugMode; // Disable cache in debug mode
         $this->cache = new RouteCache($cacheDirectory ?? sys_get_temp_dir());
         $this->debugger = new RouteDebugger();
-        $this->errorFormatter = $errorFormatter ?? new ErrorFormatter();
         $this->enforceDomain = $enforceDomain;
         $this->allowedDomains = $allowedDomains;
         $this->globalMiddleware = $globalMiddleware;
@@ -216,25 +214,21 @@ class Routing
             $this->requestStartTime = microtime(true);
         }
 
-        try {
-            // Get the host from the request for domain-aware initialization
-            $host = $request->getUri()->getHost();
-            $this->ensureInitialized($host);
-            $response = $this->routeRequest($request);
+        // Get the host from the request for domain-aware initialization
+        $host = $request->getUri()->getHost();
+        $this->ensureInitialized($host);
+        $response = $this->routeRequest($request);
 
-            // Add debug headers if in debug mode
-            if ($this->debugMode && $this->requestStartTime !== null) {
-                $timing = $this->debugger->getTimingInfo($this->requestStartTime);
-                $response = $response
-                    ->withHeader('X-Debug-Time', $timing['duration_ms'] . 'ms')
-                    ->withHeader('X-FRV', 'ElliePHP Router')
-                    ->withHeader('X-Debug-Routes', (string)count($this->routes));
-            }
-
-            return $response;
-        } catch (Throwable $e) {
-            return $this->handleException($e);
+        // Add debug headers if in debug mode
+        if ($this->debugMode && $this->requestStartTime !== null) {
+            $timing = $this->debugger->getTimingInfo($this->requestStartTime);
+            $response = $response
+                ->withHeader('X-Debug-Time', $timing['duration_ms'] . 'ms')
+                ->withHeader('X-FRV', 'ElliePHP Router')
+                ->withHeader('X-Debug-Routes', (string)count($this->routes));
         }
+
+        return $response;
     }
 
     private function ensureInitialized(?string $domain = null): void
@@ -597,37 +591,6 @@ class Routing
 
         $stream = $this->streamFactory->createStream(json_encode($data, JSON_THROW_ON_ERROR));
         return $response->withBody($stream);
-    }
-
-    /**
-     * @throws JsonException
-     */
-    public function handleException(Throwable $e): ResponseInterface
-    {
-        $status = $e->getCode();
-        $status = $status >= 100 && $status < 600 ? $status : 500;
-
-        if ($e instanceof RouteNotFoundException) {
-            $status = 404;
-        }
-
-        $data = $this->errorFormatter->format($e, $this->debugMode);
-
-        // Use status from formatter if provided, otherwise use calculated status
-        $finalStatus = $data['status'] ?? $status;
-
-        // Handle HTML formatter
-        if (isset($data['html'])) {
-            $response = $this->responseFactory
-                ->createResponse($finalStatus)
-                ->withHeader("Content-Type", "text/html");
-            $stream = $this->streamFactory->createStream($data['html']);
-            return $response->withBody($stream);
-        }
-
-        // Default JSON response
-        $response = $this->createResponse($data);
-        return $response->withStatus($finalStatus);
     }
 
     private function loadRoutes(): void
