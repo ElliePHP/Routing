@@ -63,6 +63,25 @@ $response = Router::handle($request);
 echo $response->getBody(); // {"message":"Hello World"}
 ```
 
+### Booting via Facade
+
+When using the `Router` facade, the error handling middleware is automatically configured and wrapped around the router. You simply call `Router::handle($request)`:
+
+```php
+use ElliePHP\Components\Routing\Router;
+use Nyholm\Psr7\ServerRequest;
+
+// 1. Configure
+Router::configure(['debug_mode' => true]);
+
+// 2. Define Routes
+Router::get('/', fn() => ['status' => 'ok']);
+
+// 3. Handle Request (Middleware is automatically applied)
+$request = new ServerRequest('GET', '/');
+$response = Router::handle($request);
+```
+
 ## Basic Usage
 
 ### Defining Routes

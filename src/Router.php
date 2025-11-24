@@ -133,6 +133,33 @@ final class Router
     }
 
     /**
+     * Handle an incoming request using the configured router and error middleware.
+     * 
+     * @param ServerRequestInterface $request
+     * @return ResponseInterface
+     */
+    public static function handle(ServerRequestInterface $request): ResponseInterface
+    {
+        $router = self::getInstance();
+        
+        // Create factories for PSR-7 response creation
+        // We assume Nyholm/Psr7 is available as it is a dependency
+        $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+        
+        // Create ErrorMiddleware
+        $errorMiddleware = new \ElliePHP\Components\Routing\Core\ErrorMiddleware(
+            $factory,
+            $factory,
+            self::$config['debug_mode']
+        );
+        
+        // Wrap router with middleware handler
+        $handler = new \ElliePHP\Components\Routing\Core\MiddlewareHandler($errorMiddleware, $router);
+        
+        return $handler->handle($request);
+    }
+
+    /**
      * Dynamically proxy static method calls to the underlying router instance.
      *
      * This magic method is the core of the facade. Any static call to this
