@@ -1,29 +1,24 @@
-# ElliePHP Routing Component
+# ElliePHP Routing
 
-[![Latest Version](https://img.shields.io/packagist/v/elliephp/routing.svg?style=flat-square)](https://packagist.org/packages/elliephp/routing)
-[![PHP Version](https://img.shields.io/packagist/php-v/elliephp/routing.svg?style=flat-square)](https://packagist.org/packages/elliephp/routing)
-[![License](https://img.shields.io/packagist/l/elliephp/routing.svg?style=flat-square)](https://packagist.org/packages/elliephp/routing)
-[![Total Downloads](https://img.shields.io/packagist/dt/elliephp/routing.svg?style=flat-square)](https://packagist.org/packages/elliephp/routing)
+A lightweight, blazing-fast PHP routing library built for modern applications. Based on FastRoute and PSR standards, it gives you everything you need to handle HTTP requests elegantly without the bloat.
 
-A minimal, fast routing component for ElliePHP API framework based on FastRoute and PSR-7/PSR-15 standards.
+## Why Choose ElliePHP Routing?
 
-## Features
+- **⚡ Blazing Fast** - Built on FastRoute with intelligent caching and optimized dispatcher
+- **🎯 Simple & Intuitive** - Define routes in seconds with clean, expressive syntax
+- **📦 Standards-Based** - Full PSR-7 (HTTP messages) and PSR-15 (middleware) compliance
+- **🔧 Flexible** - Use closures, controllers, or mix both - whatever fits your style
+- **🛡️ Middleware Support** - Stack middleware for authentication, logging, CORS, and more
+- **🌐 Multi-Tenant Ready** - Built-in subdomain and domain-based routing with parameter extraction
+- **🎨 Fluent API** - Expressive method chaining for readable route definitions
+- **📊 Debug Tools** - Route tables, timing headers, and detailed error messages
+- **💉 DI Container** - PSR-11 container integration for dependency injection
+- **🚀 Production Ready** - Route caching, domain enforcement, and security features
 
-- **Fast Routing**: Built on nikic/fast-route for optimal performance
-- **Performance Optimized**: Multiple caching layers and optimizations for high-traffic applications
-  - Dispatcher caching per domain
-  - Reflection metadata caching for controller methods
-  - Route hash-based cache invalidation
-  - Domain regex pattern caching
-  - Cache age validation (< 5 seconds = trusted cache)
-- **PSR Standards**: Full PSR-7 (HTTP messages) and PSR-15 (middleware) compliance
-- **Flexible Handlers**: Support for closures, controller classes, and callable arrays
-- **Middleware Support**: PSR-15 middleware with proper stack execution
-- **Route Groups**: Organize routes with shared prefixes, middleware, and names
-- **Domain Routing**: Support for subdomain and multi-tenant routing with domain parameters
-- **Route Caching**: Production-ready route caching for improved performance
-- **Debug Mode**: Detailed error messages, timing info, and route visualization
-- **Type Safe**: PHP 8.4+ with strict types and proper type hints
+## Requirements
+
+- PHP 8.4 or higher
+- Composer
 
 ## Installation
 
@@ -31,9 +26,28 @@ A minimal, fast routing component for ElliePHP API framework based on FastRoute 
 composer require elliephp/routing
 ```
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Basic Usage](#basic-usage)
+  - [Defining Routes](#defining-routes)
+  - [Route Parameters](#route-parameters)
+  - [Using Controllers](#using-controllers)
+- [Route Groups](#route-groups)
+- [Fluent API](#fluent-api-method-chaining)
+- [Middleware](#middleware)
+- [Domain Routing](#domain-routing)
+- [Configuration](#configuration)
+- [Dependency Injection](#dependency-injection-psr-11)
+- [Error Handling](#error-handling)
+- [Debugging & Development](#debugging--development)
+- [Performance & Caching](#performance--caching)
+- [Advanced Features](#advanced-features)
+- [Complete Examples](#complete-examples)
+
 ## Quick Start
 
-### Basic Setup
+Here's a complete working example to get you started in 30 seconds:
 
 ```php
 <?php
@@ -43,554 +57,145 @@ require 'vendor/autoload.php';
 use ElliePHP\Components\Routing\Router;
 use Nyholm\Psr7\ServerRequest;
 
-// Configure the router (optional)
+// Configure the router (optional, but recommended)
 Router::configure([
-    'debug_mode' => true,
+    'debug_mode' => true,  // Shows helpful errors during development
 ]);
 
-// Define a simple route
-Router::get('/', function() {
-    return ['message' => 'Hello World'];
+// Define your routes
+Router::get('/', function () {
+    return ['message' => 'Hello, World!'];
+});
+
+Router::get('/hello/{name}', function ($request, $params) {
+    return ['message' => "Hello, {$params['name']}!"];
 });
 
 // Handle the incoming request
-$request = new ServerRequest('GET', '/');
+$request = ServerRequest::fromGlobals();
 $response = Router::handle($request);
 
-// Output: {"message":"Hello World"}
+// Send the response
+http_response_code($response->getStatusCode());
+foreach ($response->getHeaders() as $name => $values) {
+    foreach ($values as $value) {
+        header("$name: $value", false);
+    }
+}
 echo $response->getBody();
 ```
 
-### Using Without Facade
+That's it! You've got a working API router.
 
-If you prefer not to use the static facade, you can work directly with the `Routing` class:
-
-```php
-<?php
-
-use ElliePHP\Components\Routing\Core\Routing;
-use Nyholm\Psr7\ServerRequest;
-
-// Create router instance
-$router = new Routing(
-    routes_directory: __DIR__ . '/routes',
-    debugMode: true,
-    cacheEnabled: false
-);
-
-// Define routes
-$router->get('/', function() {
-    return ['message' => 'Hello World'];
-});
-
-$router->get('/users/{id}', function($request, $params) {
-    return ['user_id' => $params['id']];
-});
-
-// Handle request
-$request = new ServerRequest('GET', '/users/42');
-$response = $router->handle($request);
-```
-
-## Usage Guide
+## Basic Usage
 
 ### Defining Routes
 
-#### Simple Routes
+The router supports all standard HTTP methods with a clean, intuitive API:
 
 ```php
-// Using the facade
-Router::get('/users', function() {
+// GET request
+Router::get('/users', function () {
     return ['users' => []];
 });
 
-Router::post('/users', function($request) {
-    return ['created' => true];
+// POST request
+Router::post('/users', function ($request) {
+    // Access request body
+    $body = json_decode($request->getBody()->getContents(), true);
+    return ['message' => 'User created', 'data' => $body];
 });
 
-// Without facade
-$router->get('/users', function() {
-    return ['users' => []];
+// PUT request
+Router::put('/users/{id}', function ($request, $params) {
+    return ['message' => "User {$params['id']} updated"];
 });
 
-$router->post('/users', function($request) {
-    return ['created' => true];
-});
-```
-
-#### All HTTP Methods
-
-```php
-Router::get('/users', [UserController::class, 'index']);
-Router::post('/users', [UserController::class, 'store']);
-Router::put('/users/{id}', [UserController::class, 'update']);
-Router::patch('/users/{id}', [UserController::class, 'patch']);
-Router::delete('/users/{id}', [UserController::class, 'destroy']);
-```
-
-### Fluent API (Method Chaining)
-
-The router supports a fluent API that allows you to chain configuration methods for a more expressive and readable syntax. This is an alternative to the traditional array-based configuration.
-
-#### Why Use the Fluent API?
-
-**Benefits:**
-- **More Readable**: Method chaining reads like natural language
-- **IDE Autocomplete**: Better type hints and autocomplete support
-- **Less Verbose**: No need for array keys and brackets
-- **Flexible**: Chain methods in any order
-- **Backward Compatible**: Works alongside existing array syntax
-
-#### Fluent Route Configuration
-
-Chain configuration methods directly on route definitions:
-
-```php
-// Fluent syntax - clean and expressive
-Router::get('/users', [UserController::class, 'index'])
-    ->middleware([AuthMiddleware::class])
-    ->name('users.index')
-    ->domain('api.example.com');
-
-// Equivalent array syntax (still supported)
-Router::get('/users', [UserController::class, 'index'], [
-    'middleware' => [AuthMiddleware::class],
-    'name' => 'users.index',
-    'domain' => 'api.example.com'
-]);
-```
-
-**Available Chainable Methods:**
-- `->middleware(array $middleware)` - Add middleware to the route
-- `->name(string $name)` - Set route name
-- `->domain(string $domain)` - Set domain constraint
-
-#### Fluent Group Configuration
-
-Start group definitions with any configuration method:
-
-```php
-// Start with prefix
-Router::prefix('/api/v1')
-    ->middleware([ApiMiddleware::class])
-    ->domain('api.example.com')
-    ->group(function() {
-        Router::get('/users', [UserController::class, 'index']);
-        Router::post('/users', [UserController::class, 'store']);
-    });
-
-// Start with middleware
-Router::middleware([AuthMiddleware::class])
-    ->prefix('/admin')
-    ->name('admin')
-    ->group(function() {
-        Router::get('/dashboard', [AdminController::class, 'dashboard']);
-    });
-
-// Start with domain
-Router::domain('{tenant}.example.com')
-    ->prefix('/api')
-    ->middleware([TenantMiddleware::class])
-    ->group(function() {
-        Router::get('/dashboard', function($request, $params) {
-            return ['tenant' => $params['tenant']];
-        });
-    });
-
-// Start with name prefix
-Router::name('api.v1')
-    ->prefix('/api/v1')
-    ->group(function() {
-        Router::get('/users', [UserController::class, 'index'])
-            ->name('users'); // Full name: api.v1.users
-    });
-```
-
-#### Comparison: Array vs Fluent Syntax
-
-| Feature | Array Syntax | Fluent Syntax |
-|---------|-------------|---------------|
-| **Single Route** | `Router::get($url, $handler, ['middleware' => [...]])` | `Router::get($url, $handler)->middleware([...])` |
-| **Multiple Options** | `Router::get($url, $handler, ['middleware' => [...], 'name' => '...', 'domain' => '...'])` | `Router::get($url, $handler)->middleware([...])->name('...')->domain('...')` |
-| **Route Groups** | `Router::group(['prefix' => '...', 'middleware' => [...]], $callback)` | `Router::prefix('...')->middleware([...])->group($callback)` |
-| **Readability** | Requires array keys | Reads like natural language |
-| **IDE Support** | Limited autocomplete | Full autocomplete and type hints |
-| **Flexibility** | Fixed structure | Chain in any order |
-
-#### Real-World Examples
-
-**Example 1: API Routes with Authentication**
-
-```php
-// Array syntax
-Router::group([
-    'prefix' => '/api/v1',
-    'middleware' => [ApiMiddleware::class, RateLimitMiddleware::class],
-    'domain' => 'api.example.com'
-], function() {
-    Router::get('/users', [UserController::class, 'index'], [
-        'middleware' => [AuthMiddleware::class],
-        'name' => 'api.users.index'
-    ]);
+// DELETE request
+Router::delete('/users/{id}', function ($request, $params) {
+    return ['message' => "User {$params['id']} deleted"];
 });
 
-// Fluent syntax - more readable
-Router::prefix('/api/v1')
-    ->middleware([ApiMiddleware::class, RateLimitMiddleware::class])
-    ->domain('api.example.com')
-    ->group(function() {
-        Router::get('/users', [UserController::class, 'index'])
-            ->middleware([AuthMiddleware::class])
-            ->name('api.users.index');
-    });
-```
-
-**Example 2: Multi-Tenant Application**
-
-```php
-// Array syntax
-Router::group([
-    'domain' => '{tenant}.example.com',
-    'middleware' => [TenantMiddleware::class]
-], function() {
-    Router::get('/dashboard', [DashboardController::class, 'index'], [
-        'middleware' => [AuthMiddleware::class],
-        'name' => 'dashboard'
-    ]);
-});
-
-// Fluent syntax - cleaner
-Router::domain('{tenant}.example.com')
-    ->middleware([TenantMiddleware::class])
-    ->group(function() {
-        Router::get('/dashboard', [DashboardController::class, 'index'])
-            ->middleware([AuthMiddleware::class])
-            ->name('dashboard');
-    });
-```
-
-**Example 3: Admin Panel with Multiple Middleware**
-
-```php
-// Array syntax
-Router::group([
-    'prefix' => '/admin',
-    'middleware' => [AuthMiddleware::class, AdminMiddleware::class, AuditMiddleware::class],
-    'name' => 'admin'
-], function() {
-    Router::get('/users', [AdminController::class, 'users'], [
-        'name' => 'users'
-    ]);
-    Router::get('/settings', [AdminController::class, 'settings'], [
-        'name' => 'settings'
-    ]);
-});
-
-// Fluent syntax - more expressive
-Router::prefix('/admin')
-    ->middleware([AuthMiddleware::class, AdminMiddleware::class, AuditMiddleware::class])
-    ->name('admin')
-    ->group(function() {
-        Router::get('/users', [AdminController::class, 'users'])
-            ->name('users');
-        Router::get('/settings', [AdminController::class, 'settings'])
-            ->name('settings');
-    });
-```
-
-#### Migration Guide
-
-**Step 1: Understand Backward Compatibility**
-
-The fluent API is completely backward compatible. You can:
-- Keep using array syntax in existing code
-- Use fluent syntax for new routes
-- Mix both syntaxes in the same application
-- Migrate gradually at your own pace
-
-**Step 2: Start with New Routes**
-
-Begin using fluent syntax for new routes you add:
-
-```php
-// New route with fluent syntax
-Router::get('/api/products', [ProductController::class, 'index'])
-    ->middleware([ApiMiddleware::class])
-    ->name('api.products');
-
-// Existing routes with array syntax still work
-Router::get('/users', [UserController::class, 'index'], [
-    'middleware' => [AuthMiddleware::class]
-]);
-```
-
-**Step 3: Convert Simple Routes First**
-
-Start with routes that have minimal configuration:
-
-```php
-// Before
-Router::get('/profile', [ProfileController::class, 'show'], [
-    'middleware' => [AuthMiddleware::class]
-]);
-
-// After
-Router::get('/profile', [ProfileController::class, 'show'])
-    ->middleware([AuthMiddleware::class]);
-```
-
-**Step 4: Convert Route Groups**
-
-Groups benefit significantly from fluent syntax:
-
-```php
-// Before
-Router::group(['prefix' => '/api', 'middleware' => [ApiMiddleware::class]], function() {
-    // routes...
-});
-
-// After
-Router::prefix('/api')
-    ->middleware([ApiMiddleware::class])
-    ->group(function() {
-        // routes...
-    });
-```
-
-**Step 5: Convert Complex Routes**
-
-Routes with multiple options become much more readable:
-
-```php
-// Before
-Router::get('/admin/reports', [ReportController::class, 'index'], [
-    'middleware' => [AuthMiddleware::class, AdminMiddleware::class],
-    'name' => 'admin.reports',
-    'domain' => 'admin.example.com'
-]);
-
-// After
-Router::get('/admin/reports', [ReportController::class, 'index'])
-    ->middleware([AuthMiddleware::class, AdminMiddleware::class])
-    ->name('admin.reports')
-    ->domain('admin.example.com');
-```
-
-**Step 6: Refactor Nested Groups**
-
-Nested groups become clearer with fluent syntax:
-
-```php
-// Before
-Router::group(['prefix' => '/api'], function() {
-    Router::group(['prefix' => '/v1', 'middleware' => [ApiMiddleware::class]], function() {
-        Router::group(['middleware' => [AuthMiddleware::class]], function() {
-            Router::get('/users', [UserController::class, 'index']);
-        });
-    });
-});
-
-// After
-Router::prefix('/api')
-    ->group(function() {
-        Router::prefix('/v1')
-            ->middleware([ApiMiddleware::class])
-            ->group(function() {
-                Router::middleware([AuthMiddleware::class])
-                    ->group(function() {
-                        Router::get('/users', [UserController::class, 'index']);
-                    });
-            });
-    });
-```
-
-#### Advanced Fluent Patterns
-
-**Pattern 1: Configuration Order Independence**
-
-Chain methods in any order that makes sense for your code:
-
-```php
-// All of these are equivalent
-Router::get('/users', $handler)
-    ->middleware([AuthMiddleware::class])
-    ->name('users')
-    ->domain('api.example.com');
-
-Router::get('/users', $handler)
-    ->name('users')
-    ->domain('api.example.com')
-    ->middleware([AuthMiddleware::class]);
-
-Router::get('/users', $handler)
-    ->domain('api.example.com')
-    ->middleware([AuthMiddleware::class])
-    ->name('users');
-```
-
-**Pattern 2: Multiple Middleware Calls**
-
-Calling `middleware()` multiple times merges the arrays:
-
-```php
-Router::get('/admin/users', [AdminController::class, 'users'])
-    ->middleware([AuthMiddleware::class])
-    ->middleware([AdminMiddleware::class])
-    ->middleware([AuditMiddleware::class]);
-
-// Equivalent to:
-Router::get('/admin/users', [AdminController::class, 'users'])
-    ->middleware([
-        AuthMiddleware::class,
-        AdminMiddleware::class,
-        AuditMiddleware::class
-    ]);
-```
-
-**Pattern 3: Progressive Configuration**
-
-Build up configuration conditionally:
-
-```php
-$route = Router::get('/data', [DataController::class, 'index'])
-    ->name('data.index');
-
-if ($requiresAuth) {
-    $route->middleware([AuthMiddleware::class]);
-}
-
-if ($isApiDomain) {
-    $route->domain('api.example.com');
-}
-
-// Route is automatically registered when $route goes out of scope
-```
-
-**Pattern 4: Reusable Group Configurations**
-
-Create reusable group configurations:
-
-```php
-// Define a reusable API group configuration
-function apiGroup(callable $callback): void {
-    Router::prefix('/api/v1')
-        ->middleware([ApiMiddleware::class, RateLimitMiddleware::class])
-        ->domain('api.example.com')
-        ->name('api.v1')
-        ->group($callback);
-}
-
-// Use it multiple times
-apiGroup(function() {
-    Router::get('/users', [UserController::class, 'index'])
-        ->name('users');
-    Router::get('/posts', [PostController::class, 'index'])
-        ->name('posts');
+// PATCH request
+Router::patch('/users/{id}', function ($request, $params) {
+    return ['message' => "User {$params['id']} patched"];
 });
 ```
 
-#### Mixed Syntax Usage
+**Handler Signatures:**
 
-You can freely mix array and fluent syntax in the same application:
+Your route handlers can accept:
+- `$request` - PSR-7 ServerRequestInterface
+- `$params` - Array of route parameters
 
 ```php
-// Fluent syntax for new code
-Router::prefix('/api')
-    ->middleware([ApiMiddleware::class])
-    ->group(function() {
-        // Fluent route
-        Router::get('/users', [UserController::class, 'index'])
-            ->name('api.users');
-        
-        // Array syntax route (still works)
-        Router::post('/users', [UserController::class, 'store'], [
-            'middleware' => [ValidationMiddleware::class],
-            'name' => 'api.users.store'
-        ]);
-    });
+// Both parameters
+Router::get('/posts/{id}', function ($request, $params) {
+    $postId = $params['id'];
+    $queryParams = $request->getQueryParams();
+    return ['post_id' => $postId, 'query' => $queryParams];
+});
 
-// Array syntax for existing code
-Router::group(['prefix' => '/admin'], function() {
-    Router::get('/dashboard', [AdminController::class, 'dashboard'], [
-        'middleware' => [AuthMiddleware::class, AdminMiddleware::class]
-    ]);
+// Just params (if you don't need the request)
+Router::get('/users/{id}', function ($request, $params) {
+    return ['user_id' => $params['id']];
 });
 ```
 
-#### Best Practices
+### Route Parameters
 
-**1. Use Fluent Syntax for New Code**
-
-Adopt fluent syntax for all new routes and groups to benefit from improved readability and IDE support.
-
-**2. Be Consistent Within Files**
-
-While mixing syntaxes is supported, try to be consistent within individual route files for better maintainability.
-
-**3. Leverage IDE Autocomplete**
-
-The fluent API provides excellent IDE support. Let your IDE guide you with autocomplete suggestions.
-
-**4. Chain in Logical Order**
-
-While order doesn't matter functionally, chain methods in a logical order for readability:
-
-```php
-// Recommended order: middleware -> name -> domain
-Router::get('/users', $handler)
-    ->middleware([AuthMiddleware::class])
-    ->name('users.index')
-    ->domain('api.example.com');
-```
-
-**5. Keep Groups Focused**
-
-Use fluent groups to clearly express the shared configuration:
-
-```php
-// Clear intent: all routes in this group are authenticated API endpoints
-Router::prefix('/api')
-    ->middleware([AuthMiddleware::class])
-    ->domain('api.example.com')
-    ->group(function() {
-        // routes...
-    });
-```
-
-#### Route Parameters
+Capture dynamic parts of the URL with curly braces:
 
 ```php
 // Single parameter
-Router::get('/users/{id}', function($request, $params) {
-    return ['user_id' => $params['id']];
+Router::get('/users/{id}', function ($request, $params) {
+    $userId = $params['id'];
+    return ['user_id' => $userId];
 });
 
 // Multiple parameters
-Router::get('/users/{userId}/posts/{postId}', function($request, $params) {
+Router::get('/posts/{postId}/comments/{commentId}', function ($request, $params) {
     return [
-        'user_id' => $params['userId'],
-        'post_id' => $params['postId']
+        'post' => $params['postId'],
+        'comment' => $params['commentId']
     ];
 });
 
-// Optional parameters with controller
-Router::get('/search/{query}', [SearchController::class, 'search']);
+// Parameters work with any HTTP method
+Router::put('/users/{id}/posts/{postId}', function ($request, $params) {
+    return [
+        'user' => $params['id'],
+        'post' => $params['postId'],
+        'action' => 'update'
+    ];
+});
 ```
 
-### Controllers
+**Parameter Patterns:**
 
-#### Basic Controller
+Parameters use FastRoute's powerful pattern matching:
 
 ```php
-namespace App\Controllers;
+// Numeric only
+Router::get('/users/{id:\d+}', function ($request, $params) {
+    return ['user_id' => (int)$params['id']];
+});
 
-use Psr\Http\Message\ServerRequestInterface;
+// Custom regex
+Router::get('/posts/{slug:[a-z-]+}', function ($request, $params) {
+    return ['slug' => $params['slug']];
+});
+```
 
+### Using Controllers
+
+Keep your code organized and testable with controller classes:
+
+```php
 class UserController
 {
     public function index(ServerRequestInterface $request): array
     {
-        // Return array for automatic JSON response
         return [
             'users' => [
                 ['id' => 1, 'name' => 'Alice'],
@@ -598,490 +203,301 @@ class UserController
             ]
         ];
     }
-    
+
     public function show(ServerRequestInterface $request, string $id): array
     {
-        // Route parameters are automatically injected
         return [
             'user' => [
                 'id' => $id,
-                'name' => 'User ' . $id
+                'name' => 'User ' . $id,
+                'email' => "user{$id}@example.com"
             ]
         ];
     }
-    
+
     public function store(ServerRequestInterface $request): array
     {
-        // Access request body
-        $body = json_decode((string)$request->getBody(), true);
-        
+        $body = json_decode($request->getBody()->getContents(), true);
+        return ['message' => 'User created', 'data' => $body];
+    }
+}
+
+// Array syntax [ClassName::class, 'methodName']
+Router::get('/users', [UserController::class, 'index']);
+Router::get('/users/{id}', [UserController::class, 'show']);
+Router::post('/users', [UserController::class, 'store']);
+
+// String syntax 'ClassName@methodName' (alternative)
+Router::get('/users', 'UserController@index');
+```
+
+**Controller Method Injection:**
+
+The router automatically injects route parameters into controller methods:
+
+```php
+class PostController
+{
+    // Parameters are automatically injected by name
+    public function show(ServerRequestInterface $request, string $id): array
+    {
+        // $id is automatically extracted from route parameter
+        return ['post_id' => $id];
+    }
+
+    // Multiple parameters work too
+    public function showComment(
+        ServerRequestInterface $request,
+        string $postId,
+        string $commentId
+    ): array {
         return [
-            'message' => 'User created',
-            'user' => $body
+            'post' => $postId,
+            'comment' => $commentId
         ];
     }
 }
+
+Router::get('/posts/{id}', [PostController::class, 'show']);
+Router::get('/posts/{postId}/comments/{commentId}', [PostController::class, 'showComment']);
 ```
 
-#### Registering Controller Routes
+## Route Groups
+
+Group related routes together to share common attributes like prefixes, middleware, and domains. This keeps your code DRY and organized.
+
+### Basic Groups
 
 ```php
-// Array syntax
-Router::get('/users', [UserController::class, 'index']);
-Router::get('/users/{id}', [UserController::class, 'show']);
+Router::group(['prefix' => '/api'], function () {
+    Router::get('/users', function () {
+        return ['users' => []];
+    });
+    
+    Router::get('/posts', function () {
+        return ['posts' => []];
+    });
+});
 
-// String syntax (alternative)
-Router::get('/users', 'UserController@index');
-
-// With options
-Router::post('/users', [UserController::class, 'store'], [
-    'middleware' => [AuthMiddleware::class],
-    'name' => 'users.store'
-]);
+// These routes are now available at:
+// - /api/users
+// - /api/posts
 ```
 
-#### Returning PSR-7 Responses
+### Group Options
+
+Groups support multiple configuration options:
 
 ```php
-use Psr\Http\Message\ResponseInterface;
-use Nyholm\Psr7\Response;
+Router::group([
+    'prefix' => '/api/v1',           // URL prefix
+    'middleware' => [AuthMiddleware::class],  // Shared middleware
+    'name' => 'api.v1',              // Route name prefix
+    'domain' => 'api.example.com'    // Domain constraint
+], function () {
+    Router::get('/users', function () {
+        return ['users' => []];
+    })->name('users');  // Full name: api.v1.users
+});
+```
 
-class UserController
-{
-    public function custom(ServerRequestInterface $request): ResponseInterface
-    {
-        // Build custom PSR-7 response
-        return new Response(
-            status: 201,
-            headers: ['Content-Type' => 'application/json'],
-            body: json_encode(['created' => true])
-        );
-    }
+### Nested Groups
+
+Groups can be nested infinitely for complex structures:
+
+```php
+Router::group(['prefix' => '/api'], function () {
+    
+    // API v1
+    Router::group(['prefix' => '/v1', 'name' => 'v1'], function () {
+        Router::get('/users', function () {
+            return ['version' => 'v1', 'users' => []];
+        })->name('users');  // Full name: v1.users
+    });
+    
+    // API v2
+    Router::group(['prefix' => '/v2', 'name' => 'v2'], function () {
+        Router::get('/users', function () {
+            return ['version' => 'v2', 'users' => []];
+        })->name('users');  // Full name: v2.users
+    });
+});
+
+// Routes:
+// - /api/v1/users (name: v1.users)
+// - /api/v2/users (name: v2.users)
+```
+
+### Group Middleware
+
+Apply middleware to all routes in a group:
+
+```php
+Router::group([
+    'prefix' => '/admin',
+    'middleware' => [AuthMiddleware::class, AdminMiddleware::class]
+], function () {
+    Router::get('/dashboard', function () {
+        return ['page' => 'dashboard'];
+    });
+    
+    Router::get('/users', function () {
+        return ['users' => []];
+    });
+    
+    // This route has additional middleware
+    Router::get('/settings', function () {
+        return ['settings' => []];
+    }, [
+        'middleware' => [AuditMiddleware::class]  // Merged with group middleware
+    ]);
+});
+
+// All routes have AuthMiddleware and AdminMiddleware
+// /admin/settings also has AuditMiddleware
+```
+
+## Fluent API (Method Chaining)
+
+The fluent API provides an expressive, readable alternative to array-based configuration. It supports method chaining in any order and offers better IDE autocomplete support.
+
+### Fluent Routes
+
+Chain methods to configure routes:
+
+```php
+// Single route with middleware and name
+Router::get('/dashboard', function () {
+    return ['page' => 'dashboard'];
+})
+    ->middleware([AuthMiddleware::class])
+    ->name('dashboard');
+
+// Order doesn't matter - these are equivalent
+Router::get('/users', function () {
+    return ['users' => []];
+})
+    ->name('users.index')
+    ->middleware([AuthMiddleware::class])
+    ->domain('api.example.com');
+
+Router::get('/users', function () {
+    return ['users' => []];
+})
+    ->domain('api.example.com')
+    ->middleware([AuthMiddleware::class])
+    ->name('users.index');
+```
+
+### Fluent Groups
+
+Start groups with any configuration method:
+
+```php
+// Start with prefix
+Router::prefix('/api')
+    ->middleware([ApiMiddleware::class])
+    ->name('api')
+    ->group(function () {
+        Router::get('/users', function () {
+            return ['users' => []];
+        });
+    });
+
+// Start with middleware
+Router::middleware([AuthMiddleware::class])
+    ->prefix('/admin')
+    ->group(function () {
+        Router::get('/settings', function () {
+            return ['settings' => []];
+        });
+    });
+
+// Start with domain
+Router::domain('api.example.com')
+    ->prefix('/v1')
+    ->middleware([ApiMiddleware::class])
+    ->group(function () {
+        Router::get('/users', function () {
+            return ['users' => []];
+        });
+    });
+
+// Start with name
+Router::name('blog')
+    ->prefix('/blog')
+    ->group(function () {
+        Router::get('/posts', function () {
+            return ['posts' => []];
+        })->name('posts');  // Full name: blog.posts
+    });
+```
+
+### Multiple Middleware Calls
+
+Call `middleware()` multiple times to merge middleware arrays:
+
+```php
+Router::get('/admin/reports', function () {
+    return ['reports' => []];
+})
+    ->middleware([AuthMiddleware::class])
+    ->middleware([AdminMiddleware::class])
+    ->middleware([AuditMiddleware::class])
+    ->name('admin.reports');
+
+// All three middleware will be applied in order
+```
+
+### Progressive Configuration
+
+Build configuration conditionally:
+
+```php
+$route = Router::get('/api/data', function () {
+    return ['data' => []];
+});
+
+if ($requiresAuth) {
+    $route->middleware([AuthMiddleware::class]);
 }
+
+if ($isProduction) {
+    $route->domain('api.production.com');
+}
+
+$route->name('api.data');
 ```
 
-### Route Groups
+### Mixing Syntaxes
 
-#### Basic Groups
-
-```php
-// With facade
-Router::group(['prefix' => '/api'], function() {
-    Router::get('/users', [UserController::class, 'index']);
-    Router::post('/users', [UserController::class, 'store']);
-});
-// Routes: /api/users
-
-// Without facade
-$router->group(['prefix' => '/api'], function($router) {
-    $router->get('/users', [UserController::class, 'index']);
-});
-```
-
-#### Nested Groups
+The fluent API and array syntax can be mixed freely in the same application:
 
 ```php
-Router::group(['prefix' => '/api'], function() {
-    Router::group(['prefix' => '/v1'], function() {
-        Router::get('/users', [UserController::class, 'index']);
-        // Route: /api/v1/users
-        
-        Router::group(['prefix' => '/admin'], function() {
-            Router::get('/dashboard', [AdminController::class, 'dashboard']);
-            // Route: /api/v1/admin/dashboard
-        });
-    });
-});
-```
-
-#### Groups with Middleware
-
-```php
-Router::group(['middleware' => [AuthMiddleware::class]], function() {
-    Router::get('/profile', [ProfileController::class, 'show']);
-    Router::put('/profile', [ProfileController::class, 'update']);
-});
-
-// Nested groups inherit parent middleware
-Router::group(['middleware' => [AuthMiddleware::class]], function() {
-    Router::group(['middleware' => [AdminMiddleware::class]], function() {
-        Router::get('/admin/users', [AdminController::class, 'users']);
-        // Has both AuthMiddleware and AdminMiddleware
-    });
-});
-```
-
-#### Groups with Names
-
-```php
-Router::group(['name' => 'api'], function() {
-    Router::group(['name' => 'users'], function() {
-        Router::get('/', [UserController::class, 'index'], [
-            'name' => 'index'
-        ]);
-        // Full name: api.users.index
-    });
-});
-```
-
-### Domain Routing
-
-Domain routing allows you to create routes that only respond to specific domains or subdomains. This is perfect for multi-tenant applications, API subdomains, or separating admin panels.
-
-#### Basic Domain Constraints
-
-```php
-// Main website routes
-Router::get('/', function() {
-    return ['message' => 'Welcome to example.com'];
-}, ['domain' => 'example.com']);
-
-Router::get('/about', function() {
-    return ['page' => 'about'];
-}, ['domain' => 'example.com']);
-
-// API subdomain routes
-Router::get('/users', [UserController::class, 'index'], [
-    'domain' => 'api.example.com'
-]);
-
-Router::post('/users', [UserController::class, 'store'], [
-    'domain' => 'api.example.com'
-]);
-
-// Admin subdomain routes
-Router::get('/dashboard', [AdminController::class, 'dashboard'], [
-    'domain' => 'admin.example.com'
-]);
-
-Router::get('/users', [AdminController::class, 'users'], [
-    'domain' => 'admin.example.com'
-]);
-```
-
-#### Domain Groups
-
-Group multiple routes under the same domain to keep your code organized:
-
-```php
-// API subdomain with all endpoints
-Router::group(['domain' => 'api.example.com'], function() {
-    Router::get('/users', [UserController::class, 'index']);
-    Router::post('/users', [UserController::class, 'store']);
-    Router::get('/posts', [PostController::class, 'index']);
-    Router::get('/comments', [CommentController::class, 'index']);
-});
-
-// API with versioning
-Router::group(['domain' => 'api.example.com', 'prefix' => '/v1'], function() {
-    Router::get('/users', [UserController::class, 'index']);
-    Router::get('/posts', [PostController::class, 'index']);
-    // Accessible at: http://api.example.com/v1/users
-});
-
-Router::group(['domain' => 'api.example.com', 'prefix' => '/v2'], function() {
-    Router::get('/users', [UserControllerV2::class, 'index']);
-    Router::get('/posts', [PostControllerV2::class, 'index']);
-    // Accessible at: http://api.example.com/v2/users
-});
-
-// Admin panel with authentication
-Router::group([
-    'domain' => 'admin.example.com',
-    'middleware' => [AuthMiddleware::class, AdminMiddleware::class]
-], function() {
-    Router::get('/dashboard', [AdminController::class, 'dashboard']);
-    Router::get('/users', [AdminController::class, 'users']);
-    Router::get('/settings', [AdminController::class, 'settings']);
-    Router::get('/reports', [AdminController::class, 'reports']);
-});
-```
-
-#### Domain Parameters (Multi-Tenant SaaS)
-
-Extract subdomain parts as parameters for multi-tenant applications:
-
-```php
-// Basic tenant routing
-Router::get('/dashboard', function($request, $params) {
-    $tenant = $params['tenant'];
+Router::prefix('/mixed')->group(function () {
+    // Fluent syntax
+    Router::get('/fluent', function () {
+        return ['type' => 'fluent'];
+    })->middleware([ApiMiddleware::class]);
     
-    // Load tenant-specific data
-    $tenantData = Database::getTenant($tenant);
-    
-    return [
-        'tenant' => $tenant,
-        'company' => $tenantData['company_name'],
-        'message' => 'Welcome to your dashboard'
-    ];
-}, ['domain' => '{tenant}.example.com']);
+    // Array syntax (still works)
+    Router::get('/array', function () {
+        return ['type' => 'array'];
+    }, [
+        'middleware' => [ApiMiddleware::class]
+    ]);
+});
 
-// Access: http://acme.example.com/dashboard
-// Returns: {"tenant":"acme","company":"Acme Corp","message":"Welcome to your dashboard"}
-
-// Access: http://widgets.example.com/dashboard
-// Returns: {"tenant":"widgets","company":"Widgets Inc","message":"Welcome to your dashboard"}
-
-// Combine domain and path parameters
-Router::get('/users/{id}', function($request, $params) {
-    $tenant = $params['tenant'];
-    $userId = $params['id'];
-    
-    // Load user from tenant database
-    $user = Database::getTenantUser($tenant, $userId);
-    
-    return [
-        'tenant' => $tenant,
-        'user' => $user
-    ];
-}, ['domain' => '{tenant}.example.com']);
-
-// Access: http://acme.example.com/users/42
-// Returns: {"tenant":"acme","user":{"id":42,"name":"John Doe"}}
-
-// Real-world example: Tenant-specific API
-Router::get('/api/projects', function($request, $params) {
-    $tenant = $params['tenant'];
-    return [
-        'tenant' => $tenant,
-        'projects' => ProjectService::getForTenant($tenant)
-    ];
-}, ['domain' => '{tenant}.example.com']);
-
-// Access: http://acme.example.com/api/projects
-// Access: http://widgets.example.com/api/projects
+// Both work seamlessly together!
 ```
 
-#### Multi-Tenant Application Example
+## Middleware
 
-Complete multi-tenant SaaS application structure:
+Middleware provides a powerful way to filter, modify, or inspect HTTP requests and responses. ElliePHP Routing fully supports PSR-15 middleware with both class-based and closure-based implementations.
 
-```php
-// Configure domain enforcement
-Router::configure([
-    'enforce_domain' => true,
-    'allowed_domains' => [
-        'myapp.com',              // Main marketing site
-        'app.myapp.com',          // Main app domain
-        '{tenant}.myapp.com',     // Tenant subdomains
-    ],
-]);
-
-// Main marketing site
-Router::group(['domain' => 'myapp.com'], function() {
-    Router::get('/', [MarketingController::class, 'home']);
-    Router::get('/pricing', [MarketingController::class, 'pricing']);
-    Router::get('/signup', [MarketingController::class, 'signup']);
-});
-
-// Tenant application routes
-Router::group(['domain' => '{tenant}.myapp.com'], function() {
-    // Public routes
-    Router::get('/login', [AuthController::class, 'showLogin']);
-    Router::post('/login', [AuthController::class, 'login']);
-    
-    // Protected tenant routes
-    Router::group(['middleware' => [AuthMiddleware::class]], function() {
-        Router::get('/dashboard', function($request, $params) {
-            $tenant = $params['tenant'];
-            return [
-                'tenant' => $tenant,
-                'stats' => DashboardService::getStats($tenant)
-            ];
-        });
-        
-        Router::get('/projects', [ProjectController::class, 'index']);
-        Router::post('/projects', [ProjectController::class, 'store']);
-        Router::get('/projects/{id}', [ProjectController::class, 'show']);
-        
-        Router::get('/team', [TeamController::class, 'index']);
-        Router::post('/team/invite', [TeamController::class, 'invite']);
-        
-        Router::get('/settings', [SettingsController::class, 'show']);
-        Router::put('/settings', [SettingsController::class, 'update']);
-    });
-});
-
-// Examples:
-// http://myapp.com/ - Marketing site
-// http://acme.myapp.com/dashboard - Acme's dashboard
-// http://widgets.myapp.com/projects - Widgets Inc's projects
-// http://startup.myapp.com/team - Startup's team page
-```
-
-#### Multiple Domain Parameters
-
-Extract multiple parts from the domain for advanced routing:
+### Creating PSR-15 Middleware
 
 ```php
-// Regional routing
-Router::get('/api/data', function($request, $params) {
-    $region = $params['region'];
-    $service = $params['service'];
-    
-    return [
-        'service' => $service,
-        'region' => $region,
-        'endpoint' => "https://{$service}.{$region}.example.com",
-        'data' => RegionalService::getData($region, $service)
-    ];
-}, ['domain' => '{service}.{region}.example.com']);
-
-// Access: http://api.us-east.example.com/api/data
-// Returns: {"service":"api","region":"us-east","endpoint":"https://api.us-east.example.com","data":[...]}
-
-// Access: http://cdn.eu-west.example.com/api/data
-// Returns: {"service":"cdn","region":"eu-west","endpoint":"https://cdn.eu-west.example.com","data":[...]}
-
-// Multi-tenant with environment
-Router::get('/status', function($request, $params) {
-    return [
-        'tenant' => $params['tenant'],
-        'environment' => $params['env'],
-        'status' => 'operational'
-    ];
-}, ['domain' => '{tenant}.{env}.example.com']);
-
-// Access: http://acme.staging.example.com/status
-// Returns: {"tenant":"acme","environment":"staging","status":"operational"}
-
-// Access: http://acme.production.example.com/status
-// Returns: {"tenant":"acme","environment":"production","status":"operational"}
-```
-
-#### Domain Configuration
-
-```php
-Router::configure([
-    // Enforce domain whitelist (reject unlisted domains with 403)
-    'enforce_domain' => true,
-    
-    // Allowed domains (supports patterns with parameters)
-    'allowed_domains' => [
-        'example.com',
-        'api.example.com',
-        'admin.example.com',
-        '{tenant}.example.com',
-        '{app}.{region}.example.com'
-    ],
-]);
-```
-
-#### Routes Without Domain Constraints
-
-Routes without domain constraints work on any domain:
-
-```php
-// Health check endpoint - works on all domains
-Router::get('/health', function() {
-    return ['status' => 'ok', 'timestamp' => time()];
-});
-
-// Metrics endpoint - accessible from any domain
-Router::get('/metrics', function() {
-    return [
-        'requests' => MetricsService::getRequestCount(),
-        'uptime' => MetricsService::getUptime()
-    ];
-});
-
-// This route works on:
-// - http://example.com/health
-// - http://api.example.com/health
-// - http://admin.example.com/health
-// - http://tenant1.example.com/health
-// - http://any-subdomain.example.com/health
-```
-
-#### Real-World Complete Example
-
-```php
-<?php
-
-use ElliePHP\Components\Routing\Router;
-
-// Configure domains
-Router::configure([
-    'enforce_domain' => true,
-    'allowed_domains' => [
-        'myapp.com',
-        'api.myapp.com',
-        'admin.myapp.com',
-        '{tenant}.myapp.com'
-    ],
-]);
-
-// Marketing site (myapp.com)
-Router::group(['domain' => 'myapp.com'], function() {
-    Router::get('/', [HomeController::class, 'index']);
-    Router::get('/features', [HomeController::class, 'features']);
-    Router::get('/pricing', [HomeController::class, 'pricing']);
-    Router::post('/signup', [SignupController::class, 'register']);
-});
-
-// Public API (api.myapp.com)
-Router::group(['domain' => 'api.myapp.com', 'prefix' => '/v1'], function() {
-    // Public endpoints
-    Router::post('/auth/login', [ApiAuthController::class, 'login']);
-    Router::post('/auth/register', [ApiAuthController::class, 'register']);
-    
-    // Protected API endpoints
-    Router::group(['middleware' => [ApiAuthMiddleware::class]], function() {
-        Router::get('/users', [ApiUserController::class, 'index']);
-        Router::get('/users/{id}', [ApiUserController::class, 'show']);
-        Router::post('/users', [ApiUserController::class, 'store']);
-    });
-});
-
-// Admin panel (admin.myapp.com)
-Router::group([
-    'domain' => 'admin.myapp.com',
-    'middleware' => [AuthMiddleware::class, AdminMiddleware::class]
-], function() {
-    Router::get('/dashboard', [AdminDashboardController::class, 'index']);
-    Router::get('/tenants', [AdminTenantController::class, 'index']);
-    Router::get('/tenants/{id}', [AdminTenantController::class, 'show']);
-    Router::post('/tenants', [AdminTenantController::class, 'create']);
-    Router::delete('/tenants/{id}', [AdminTenantController::class, 'delete']);
-});
-
-// Multi-tenant application ({tenant}.myapp.com)
-Router::group(['domain' => '{tenant}.myapp.com'], function() {
-    // Public tenant pages
-    Router::get('/login', [TenantAuthController::class, 'showLogin']);
-    Router::post('/login', [TenantAuthController::class, 'login']);
-    
-    // Protected tenant routes
-    Router::group(['middleware' => [TenantAuthMiddleware::class]], function() {
-        Router::get('/dashboard', function($request, $params) {
-            $tenant = $params['tenant'];
-            return view('dashboard', [
-                'tenant' => TenantService::load($tenant),
-                'stats' => DashboardService::getStats($tenant)
-            ]);
-        });
-        
-        Router::get('/projects', [TenantProjectController::class, 'index']);
-        Router::post('/projects', [TenantProjectController::class, 'store']);
-        Router::get('/projects/{id}', [TenantProjectController::class, 'show']);
-        Router::put('/projects/{id}', [TenantProjectController::class, 'update']);
-        Router::delete('/projects/{id}', [TenantProjectController::class, 'destroy']);
-    });
-});
-
-// Health check - works on all domains
-Router::get('/health', function() {
-    return ['status' => 'ok'];
-});
-```
-
-### Middleware
-
-#### Creating Middleware
-
-```php
-namespace App\Middleware;
-
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -1096,749 +512,551 @@ class AuthMiddleware implements MiddlewareInterface
         // Check authentication before handling request
         $token = $request->getHeaderLine('Authorization');
         
-        if (!$this->isValidToken($token)) {
-            throw new UnauthorizedException('Invalid token');
+        if (empty($token)) {
+            // Return 401 response (short-circuit the request)
+            $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+            return $factory->createResponse(401)
+                ->withHeader('Content-Type', 'application/json')
+                ->withBody($factory->createStream(json_encode([
+                    'error' => 'Unauthorized'
+                ])));
         }
         
-        // Continue to next middleware or handler
+        // Continue to next middleware/handler
         $response = $handler->handle($request);
         
-        // Optionally modify response
+        // Modify response after handling
         return $response->withHeader('X-Authenticated', 'true');
-    }
-    
-    private function isValidToken(string $token): bool
-    {
-        // Your authentication logic
-        return !empty($token);
     }
 }
 ```
 
-#### Applying Middleware
+### Applying Middleware
+
+**On Single Routes:**
 
 ```php
-// Single middleware on route
-Router::get('/protected', [SecureController::class, 'index'], [
+// Array syntax
+Router::get('/protected', function () {
+    return ['data' => 'secret'];
+}, [
     'middleware' => [AuthMiddleware::class]
 ]);
 
-// Multiple middleware (executed in order)
-Router::get('/admin', [AdminController::class, 'index'], [
-    'middleware' => [
-        AuthMiddleware::class,
-        AdminMiddleware::class,
-        RateLimitMiddleware::class
-    ]
-]);
+// Fluent syntax
+Router::get('/protected', function () {
+    return ['data' => 'secret'];
+})
+    ->middleware([AuthMiddleware::class]);
 
-// Group middleware
-Router::group(['middleware' => [AuthMiddleware::class]], function() {
-    Router::get('/profile', [ProfileController::class, 'show']);
-    Router::put('/profile', [ProfileController::class, 'update']);
+// Multiple middleware (executed in order)
+Router::get('/admin/data', function () {
+    return ['data' => 'admin'];
+})
+    ->middleware([AuthMiddleware::class, AdminMiddleware::class]);
+```
+
+**On Route Groups:**
+
+```php
+Router::group([
+    'prefix' => '/api',
+    'middleware' => [AuthMiddleware::class, ApiMiddleware::class]
+], function () {
+    Router::get('/users', function () {
+        return ['users' => []];
+    });
+    
+    // This route has group middleware + additional middleware
+    Router::get('/posts', function () {
+        return ['posts' => []];
+    }, [
+        'middleware' => [CacheMiddleware::class]  // Merged with group middleware
+    ]);
 });
 ```
 
-#### Closure Middleware
+**Global Middleware:**
+
+Apply middleware to all routes:
 
 ```php
-Router::get('/custom', [CustomController::class, 'index'], [
+Router::configure([
+    'global_middleware' => [
+        CorsMiddleware::class,
+        LoggingMiddleware::class,
+    ]
+]);
+
+// Global middleware executes first (outer layer),
+// then group middleware, then route middleware (inner layer)
+```
+
+### Closure Middleware
+
+For simple cases, use closures instead of classes:
+
+```php
+Router::get('/custom', function () {
+    return ['message' => 'Hello'];
+}, [
     'middleware' => [
-        function($request, $next) {
+        function ($request, $next) {
             // Before handler
-            $start = microtime(true);
+            echo "Before request\n";
             
-            // Process request
             $response = $next($request);
             
             // After handler
-            $duration = microtime(true) - $start;
-            return $response->withHeader('X-Response-Time', $duration . 's');
+            echo "After request\n";
+            return $response->withHeader('X-Custom', 'true');
         }
     ]
 ]);
 ```
 
-#### Global Middleware
+### Middleware Examples
 
-Apply middleware to all routes automatically by configuring global middleware:
-
-```php
-use App\Middleware\RequestIdMiddleware;
-use App\Middleware\LoggingMiddleware;
-use App\Middleware\CorsMiddleware;
-
-Router::configure([
-    'global_middleware' => [
-        RequestIdMiddleware::class,  // Runs on every request
-        LoggingMiddleware::class,    // Runs on every request
-        CorsMiddleware::class,       // Runs on every request
-    ],
-]);
-
-// All routes automatically have global middleware applied
-Router::get('/users', [UserController::class, 'index']);
-Router::get('/posts', [PostController::class, 'index']);
-```
-
-**Execution Order with Global Middleware:**
+**Timing Middleware:**
 
 ```php
-Router::configure([
-    'global_middleware' => [
-        GlobalMiddleware1::class,
-        GlobalMiddleware2::class,
-    ],
-]);
-
-Router::get('/test', $handler, [
-    'middleware' => [
-        RouteMiddleware1::class,
-        RouteMiddleware2::class,
-    ]
-]);
-
-// Execution order:
-// 1. GlobalMiddleware1 (before)
-// 2. GlobalMiddleware2 (before)
-// 3. RouteMiddleware1 (before)
-// 4. RouteMiddleware2 (before)
-// 5. Handler executes
-// 6. RouteMiddleware2 (after)
-// 7. RouteMiddleware1 (after)
-// 8. GlobalMiddleware2 (after)
-// 9. GlobalMiddleware1 (after)
-```
-
-**Framework Integration Example:**
-
-```php
-final class HttpApplication
+class TimingMiddleware implements MiddlewareInterface
 {
-    private function globalMiddlewares(): array
-    {
-        return [
-            RequestIdMiddleware::class,
-            LoggingMiddleware::class,
-            CorsMiddleware::class,
-        ];
-    }
-    
-    public function boot(): void
-    {
-        Router::configure([
-            'debug_mode' => false,
-            'cache_enabled' => true,
-            'routes_directory' => __DIR__ . '/routes',
-            'global_middleware' => $this->globalMiddlewares(),
-        ]);
-        
-        $request = ServerRequestFactory::fromGlobals();
-        $response = Router::handle($request);
-        
-        // Emit response...
-    }
-}
-```
-
-**Common Global Middleware Use Cases:**
-
-- **Request ID Tracking**: Add unique IDs to all requests
-- **Logging**: Log all incoming requests and responses
-- **CORS**: Apply CORS headers to all API responses
-- **Security Headers**: Add security headers to all responses
-- **Rate Limiting**: Apply rate limiting to all endpoints
-- **Authentication**: Check authentication on all routes (with exceptions)
-- **Request/Response Transformation**: Modify all requests/responses
-
-#### Middleware Execution Order
-
-```php
-Router::get('/test', $handler, [
-    'middleware' => [
-        FirstMiddleware::class,   // Executes first (before)
-        SecondMiddleware::class,  // Executes second (before)
-        ThirdMiddleware::class,   // Executes third (before)
-        // Handler executes here
-        // ThirdMiddleware (after)
-        // SecondMiddleware (after)
-        // FirstMiddleware (after)
-    ]
-]);
-```
-
-## Dependency Injection (PSR-11)
-
-The router supports PSR-11 containers for automatic dependency injection of controllers and middleware.
-
-### Basic Container Setup
-
-```php
-use Psr\Container\ContainerInterface;
-
-// Configure router with your PSR-11 container
-Router::configure([
-    'container' => $container, // Any PSR-11 compatible container
-]);
-```
-
-### Controller Dependency Injection
-
-```php
-class UserRepository
-{
-    public function findById(int $id): array
-    {
-        // Database logic here
-        return ['id' => $id, 'name' => 'John Doe'];
-    }
-}
-
-class UserController
-{
-    // Dependencies injected via constructor
-    public function __construct(
-        private UserRepository $userRepository
-    ) {}
-
-    public function show(ServerRequestInterface $request, array $params): array
-    {
-        $user = $this->userRepository->findById((int) $params['id']);
-        return ['user' => $user];
-    }
-}
-
-// Register services in your container
-$container->set(UserRepository::class, fn() => new UserRepository());
-$container->set(UserController::class, fn($c) => 
-    new UserController($c->get(UserRepository::class))
-);
-
-// Router will resolve UserController from container
-Router::get('/users/{id}', [UserController::class, 'show']);
-```
-
-### Middleware Dependency Injection
-
-```php
-class LoggingMiddleware implements MiddlewareInterface
-{
-    public function __construct(
-        private LoggerInterface $logger
-    ) {}
-
     public function process(
         ServerRequestInterface $request,
         RequestHandlerInterface $handler
     ): ResponseInterface {
-        $this->logger->info('Request received', [
-            'method' => $request->getMethod(),
-            'uri' => (string) $request->getUri()
-        ]);
+        $start = microtime(true);
+        $response = $handler->handle($request);
+        $duration = (microtime(true) - $start) * 1000;
         
-        return $handler->handle($request);
+        return $response->withHeader('X-Response-Time', round($duration, 2) . 'ms');
     }
 }
-
-// Register in container
-$container->set(LoggerInterface::class, fn() => new Logger());
-$container->set(LoggingMiddleware::class, fn($c) => 
-    new LoggingMiddleware($c->get(LoggerInterface::class))
-);
-
-// Router will resolve middleware from container
-Router::get('/api/users', $handler, [
-    'middleware' => [LoggingMiddleware::class]
-]);
 ```
 
-### Fallback Behavior
-
-If a controller or middleware class is not found in the container, the router will automatically instantiate it using `new ClassName()`. This allows you to:
-
-- Use the container only for classes that need dependencies
-- Mix container-resolved and simple classes
-- Gradually adopt dependency injection
-
-### Popular Container Libraries
-
-The router works with any PSR-11 compatible container:
-
-- **PHP-DI**: `composer require php-di/php-di`
-- **Symfony DependencyInjection**: `composer require symfony/dependency-injection`
-- **Laravel Container**: `composer require illuminate/container`
-- **Pimple**: `composer require pimple/pimple`
-
-See `examples/container-example.php` for a complete working example.
-
-## Configuration
-
-### Development Configuration
+**CORS Middleware:**
 
 ```php
-Router::configure([
-    'debug_mode' => true,
-    'cache_enabled' => false,
-]);
-
-// View all registered routes
-echo Router::printRoutes();
-```
-
-### Production Configuration
-
-```php
-Router::configure([
-    'routes_directory' => __DIR__ . '/routes',
-    'cache_enabled' => true,
-    'cache_directory' => __DIR__ . '/storage/cache',
-    'debug_mode' => false,
-]);
-
-// Clear cache when deploying new routes
-Router::clearCache();
-```
-
-### Configuration Options
-
-```php
-Router::configure([
-    // Directory containing route files (default: '/')
-    'routes_directory' => __DIR__ . '/routes',
-    
-    // Enable debug mode for detailed errors (default: false)
-    'debug_mode' => $_ENV['APP_DEBUG'] ?? false,
-    
-    // Enable route caching for production (default: false)
-    'cache_enabled' => $_ENV['APP_ENV'] === 'production',
-    
-    // Cache directory (default: sys_get_temp_dir())
-    'cache_directory' => __DIR__ . '/storage/cache',
-    
-    // Custom error formatter (default: JsonErrorFormatter)
-    'error_formatter' => new HtmlErrorFormatter(),
-    
-    // Enforce domain whitelist (default: false)
-    'enforce_domain' => false,
-    
-    // Allowed domains (supports domain parameters like {tenant}.example.com)
-    'allowed_domains' => [
-        'example.com',
-        'api.example.com',
-        '{tenant}.example.com'
-    ],
-    
-    // Global middleware applied to all routes (default: [])
-    'global_middleware' => [
-        RequestIdMiddleware::class,
-        LoggingMiddleware::class,
-        CorsMiddleware::class,
-    ],
-    
-    // PSR-11 container for dependency injection (default: null)
-    'container' => $container,
-]);
-```
-
-### Custom Error Formatters
-
-```php
-use ElliePHP\Components\Routing\Core\HtmlErrorFormatter;
-use ElliePHP\Components\Routing\Core\JsonErrorFormatter;
-
-// Use HTML error pages
-Router::configure([
-    'error_formatter' => new HtmlErrorFormatter(),
-]);
-
-// Use JSON errors (default)
-Router::configure([
-    'error_formatter' => new JsonErrorFormatter(),
-]);
-
-// Create custom formatter
-class CustomErrorFormatter implements ErrorFormatterInterface
+class CorsMiddleware implements MiddlewareInterface
 {
-    public function format(Throwable $e, bool $debugMode): array
-    {
-        return [
-            'error' => $e->getMessage(),
-            'code' => $e->getCode(),
-        ];
+    public function process(
+        ServerRequestInterface $request,
+        RequestHandlerInterface $handler
+    ): ResponseInterface {
+        // Handle preflight requests
+        if ($request->getMethod() === 'OPTIONS') {
+            $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+            return $factory->createResponse(200)
+                ->withHeader('Access-Control-Allow-Origin', '*')
+                ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        }
+        
+        $response = $handler->handle($request);
+        
+        return $response
+            ->withHeader('Access-Control-Allow-Origin', '*')
+            ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     }
 }
 ```
 
-## Route Files
-
-Organize routes in separate files:
+**Logging Middleware:**
 
 ```php
-// routes/api.php
-<?php
+class LoggingMiddleware implements MiddlewareInterface
+{
+    public function process(
+        ServerRequestInterface $request,
+        RequestHandlerInterface $handler
+    ): ResponseInterface {
+        $method = $request->getMethod();
+        $path = $request->getUri()->getPath();
+        
+        error_log("[{$method}] {$path} - Started");
+        
+        $response = $handler->handle($request);
+        
+        error_log("[{$method}] {$path} - Completed with status {$response->getStatusCode()}");
+        
+        return $response;
+    }
+}
+```
 
-use ElliePHP\Components\Routing\Router;
+### Middleware Execution Order
 
-Router::group(['prefix' => '/api/v1'], function() {
-    require __DIR__ . '/api/users.php';
-    require __DIR__ . '/api/posts.php';
+Middleware executes in a specific order:
+
+1. **Global middleware** (configured in `Router::configure()`)
+2. **Group middleware** (from outermost to innermost group)
+3. **Route middleware** (specific to the route)
+
+```php
+Router::configure([
+    'global_middleware' => [GlobalMiddleware::class]  // Executes first
+]);
+
+Router::group(['middleware' => [GroupMiddleware::class]], function () {  // Executes second
+    Router::get('/test', function () {
+        return ['test' => true];
+    }, [
+        'middleware' => [RouteMiddleware::class]  // Executes third
+    ]);
+});
+
+// Execution order:
+// 1. GlobalMiddleware
+// 2. GroupMiddleware
+// 3. RouteMiddleware
+// 4. Route handler
+// 5. RouteMiddleware (response)
+// 6. GroupMiddleware (response)
+// 7. GlobalMiddleware (response)
+```
+
+## Domain Routing
+
+ElliePHP Routing provides powerful domain-based routing for multi-tenant applications, API subdomains, and domain-specific functionality.
+
+### Basic Domain Constraints
+
+Restrict routes to specific domains:
+
+```php
+// Main domain
+Router::get('/', function () {
+    return ['message' => 'Welcome to example.com'];
+}, ['domain' => 'example.com']);
+
+// API subdomain
+Router::domain('api.example.com')->group(function () {
+    Router::get('/users', function () {
+        return ['api' => 'users'];
+    });
+    
+    Router::get('/posts', function () {
+        return ['api' => 'posts'];
+    });
+});
+
+// Admin subdomain
+Router::domain('admin.example.com')->group(function () {
+    Router::get('/dashboard', function () {
+        return ['page' => 'admin dashboard'];
+    });
 });
 ```
 
-```php
-// routes/api/users.php
-<?php
+### Dynamic Subdomains (Multi-Tenant)
 
-use ElliePHP\Components\Routing\Router;
-
-Router::get('/users', [UserController::class, 'index']);
-Router::get('/users/{id}', [UserController::class, 'show']);
-Router::post('/users', [UserController::class, 'store']);
-Router::put('/users/{id}', [UserController::class, 'update']);
-Router::delete('/users/{id}', [UserController::class, 'destroy']);
-```
-
-## Debug Features
-
-### Route Listing
+Extract subdomain parameters for multi-tenant applications:
 
 ```php
-// Print formatted route table
-echo Router::printRoutes();
+// {tenant} will be extracted from the subdomain
+Router::domain('{tenant}.example.com')->group(function () {
+    Router::get('/dashboard', function ($request, $params) {
+        $tenant = $params['tenant'];  // e.g., "acme", "widgets", "company"
+        return [
+            'tenant' => $tenant,
+            'page' => 'dashboard'
+        ];
+    });
+    
+    Router::get('/users', function ($request, $params) {
+        return [
+            'tenant' => $params['tenant'],
+            'users' => []  // Load users for this tenant
+        ];
+    });
+    
+    // Combine domain and path parameters
+    Router::get('/users/{id}', function ($request, $params) {
+        return [
+            'tenant' => $params['tenant'],  // From domain
+            'user_id' => $params['id']      // From path
+        ];
+    });
+});
 
-/* Output:
-====================================================================================================
-METHOD   PATH                                     NAME                           HANDLER
-====================================================================================================
-GET      /users                                   get.users                      UserController@index
-GET      /users/{id}                              get.users.id                   UserController@show
-POST     /users                                   post.users                     UserController@store
-====================================================================================================
-Total routes: 3
-*/
-
-// Get routes as array
-$routes = Router::getFormattedRoutes();
+// Examples:
+// acme.example.com/dashboard -> tenant = "acme"
+// widgets.example.com/users/42 -> tenant = "widgets", id = "42"
 ```
 
-### Debug Headers
+### Multiple Domain Parameters
 
-When debug mode is enabled, responses automatically include:
-
-```
-X-Debug-Time: 4.23ms
-X-Debug-Routes: 15
-```
-
-### Detailed Error Messages
-
-Debug mode provides comprehensive error information:
-
-```json
-{
-  "error": "Route not found",
-  "status": 404,
-  "debug": {
-    "exception": "ElliePHP\\Components\\Routing\\Exceptions\\RouteNotFoundException",
-    "file": "/path/to/Routing.php",
-    "line": 246,
-    "trace": "..."
-  }
-}
-```
-
-### Route Inspection
+Extract multiple parts from the domain:
 
 ```php
-// Check configuration
-if (Router::isDebugMode()) {
-    echo "Debug mode is enabled\n";
-}
+Router::domain('{account}.{region}.example.com')->group(function () {
+    Router::get('/data', function ($request, $params) {
+        return [
+            'account' => $params['account'],  // e.g., "acme"
+            'region' => $params['region'],    // e.g., "us-east"
+            'data' => []
+        ];
+    });
+});
 
-if (Router::isCacheEnabled()) {
-    echo "Cache is enabled\n";
-}
-
-// Get all routes
-$routes = Router::getRoutes();
-foreach ($routes as $route) {
-    echo "{$route['method']} {$route['path']}\n";
-}
+// Example: acme.us-east.example.com/data
+// -> account = "acme", region = "us-east"
 ```
 
-## Performance & Caching
+### Domain Enforcement
 
-### Performance Optimizations
-
-ElliePHP Routing includes multiple performance optimizations designed for high-traffic production environments:
-
-#### 1. Route Caching
-Routes are serialized and cached to avoid recompilation on every request:
+Restrict your application to specific domains:
 
 ```php
 Router::configure([
-    'cache_enabled' => true,
-    'cache_directory' => __DIR__ . '/storage/cache',
+    'enforce_domain' => true,
+    'allowed_domains' => [
+        'example.com',
+        'api.example.com',
+        'admin.example.com',
+        '{tenant}.example.com',  // Pattern-based domains
+    ]
 ]);
+
+// Requests from other domains will receive a 403 Forbidden response
 ```
 
-**Performance Impact**: Eliminates route file loading and parsing overhead on subsequent requests.
+### Mixed Domain Routing
 
-#### 2. Dispatcher Caching
-FastRoute dispatchers are cached per domain, avoiding rebuilding on every request:
+Combine domain-specific and domain-agnostic routes:
 
 ```php
-// First request to example.com - builds and caches dispatcher
-// Subsequent requests to example.com - reuses cached dispatcher
-// First request to api.example.com - builds separate cached dispatcher
+// Routes available on all domains
+Router::get('/health', function () {
+    return ['status' => 'healthy'];
+});
+
+// Routes only on api.example.com
+Router::domain('api.example.com')->group(function () {
+    Router::get('/v1/users', function () {
+        return ['users' => []];
+    });
+});
+
+// Routes only on admin.example.com
+Router::domain('admin.example.com')->group(function () {
+    Router::get('/dashboard', function () {
+        return ['page' => 'admin'];
+    });
+});
 ```
 
-**Performance Impact**: Reduces dispatcher compilation time by ~90% on subsequent requests.
-
-#### 3. Reflection Metadata Caching
-Controller method parameter metadata is extracted once and cached:
+### Real-World Multi-Tenant Example
 
 ```php
-class UserController {
-    // Reflection metadata cached after first invocation
-    public function show(ServerRequestInterface $request, string $id): array {
-        return ['user_id' => $id];
-    }
-}
-```
-
-**Performance Impact**: Eliminates expensive reflection operations on every request. Direct method invocation is used instead of `ReflectionMethod::invokeArgs()`.
-
-#### 4. Domain Regex Caching
-Domain patterns are compiled to regex once and cached:
-
-```php
-Router::get('/dashboard', $handler, [
-    'domain' => '{tenant}.example.com'  // Compiled once, cached forever
-]);
-```
-
-**Performance Impact**: Avoids regex compilation overhead on every domain match.
-
-#### 5. Smart Cache Validation
-Cache validation uses a 5-second trust window to avoid expensive filesystem checks:
-
-```php
-// Cache age < 5 seconds: Trusted without validation
-// Cache age >= 5 seconds: Validates against route file modification times
-```
-
-**Performance Impact**: Reduces filesystem I/O by ~95% in high-traffic scenarios.
-
-#### 6. Route Hash Invalidation
-Uses CRC32 hashing for efficient cache invalidation:
-
-```php
-// Hash calculated only when routes change
-// Lightweight comparison instead of deep route comparison
-```
-
-**Performance Impact**: Fast cache validation with minimal CPU overhead.
-
-### Enable Caching
-
-```php
+// Configure domain enforcement
 Router::configure([
-    'cache_enabled' => true,
-    'cache_directory' => __DIR__ . '/storage/cache',
-]);
-```
-
-### Clear Cache
-
-```php
-// Clear cache manually
-Router::clearCache();
-
-// Or delete the cache file
-unlink(__DIR__ . '/storage/cache/ellie_routes.cache');
-```
-
-### Cache Behavior
-
-- Cache is automatically disabled when `debug_mode` is `true`
-- Routes are cached after first load
-- Cache is loaded on subsequent requests
-- Failed cache loads fall back to loading routes normally
-- Cache validation skipped for requests within 5 seconds of last validation
-
-### Performance Benchmarks
-
-Typical performance improvements with caching enabled:
-
-| Metric | Without Cache | With Cache | Improvement |
-|--------|--------------|------------|-------------|
-| Route Loading | ~5-10ms | ~0.1ms | **50-100x faster** |
-| Dispatcher Build | ~2-4ms | ~0.05ms | **40-80x faster** |
-| Reflection Operations | ~0.5ms per call | ~0.01ms per call | **50x faster** |
-| Domain Matching | ~0.2ms per pattern | ~0.01ms per pattern | **20x faster** |
-
-### Production Recommendations
-
-For optimal performance in production:
-
-```php
-Router::configure([
-    // Enable caching
-    'cache_enabled' => true,
-    'cache_directory' => __DIR__ . '/storage/cache',
-    
-    // Disable debug mode
-    'debug_mode' => false,
-    
-    // Use OPcache for PHP bytecode caching
-    // php.ini: opcache.enable=1
-    
-    // Preload routes on deployment
-    // Clear cache after deploying new routes
+    'enforce_domain' => true,
+    'allowed_domains' => [
+        'app.example.com',           // Main app
+        '{tenant}.example.com',      // Tenant subdomains
+    ]
 ]);
 
-// Warm up cache after deployment
-Router::clearCache();
-$request = new ServerRequest('GET', '/');
-Router::handle($request); // Builds and caches routes
-```
-
-### Memory Usage
-
-The router is designed for minimal memory footprint:
-
-- Only essential data stored in cache structures
-- Closures and non-serializable data excluded from cache
-- Dispatcher cache stores only dispatcher instance and hash
-- Reflection cache stores only parameter metadata arrays
-
-**Typical Memory Usage**: ~50-200KB for 100 routes (depending on complexity)
-
-## Testing
-
-### Basic Testing
-
-```php
-use ElliePHP\Components\Routing\Router;
-use Nyholm\Psr7\ServerRequest;
-use PHPUnit\Framework\TestCase;
-
-class RouteTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        // Reset router state between tests
-        Router::resetInstance();
-        Router::reset();
-    }
+// Main application domain
+Router::domain('app.example.com')->group(function () {
+    Router::get('/', function () {
+        return ['page' => 'landing'];
+    });
     
-    public function testUserRoute(): void
-    {
-        Router::get('/users/{id}', function($request, $params) {
-            return ['user_id' => $params['id']];
+    Router::get('/pricing', function () {
+        return ['plans' => []];
+    });
+});
+
+// Tenant-specific routes
+Router::domain('{tenant}.example.com')
+    ->middleware([TenantMiddleware::class])
+    ->group(function () {
+        Router::get('/dashboard', function ($request, $params) {
+            $tenant = $params['tenant'];
+            // Load tenant-specific data
+            return [
+                'tenant' => $tenant,
+                'dashboard' => []
+            ];
         });
         
-        $request = new ServerRequest('GET', '/users/123');
-        $response = Router::handle($request);
+        Router::get('/settings', function ($request, $params) {
+            return [
+                'tenant' => $params['tenant'],
+                'settings' => []
+            ];
+        });
         
-        $this->assertEquals(200, $response->getStatusCode());
-        
-        $body = json_decode((string)$response->getBody(), true);
-        $this->assertEquals('123', $body['user_id']);
-    }
-}
+        Router::get('/users/{id}', function ($request, $params) {
+            return [
+                'tenant' => $params['tenant'],
+                'user' => ['id' => $params['id']]
+            ];
+        });
+    });
 ```
 
-### Testing with Controllers
+## Configuration
+
+Configure the router before defining routes using `Router::configure()`. Configuration must be done before the router is first used.
+
+### All Configuration Options
 
 ```php
-public function testUserController(): void
-{
-    Router::get('/users', [UserController::class, 'index']);
+Router::configure([
+    // ============================================
+    // Development & Debugging
+    // ============================================
     
-    $request = new ServerRequest('GET', '/users');
-    $response = Router::handle($request);
+    // Enable detailed error messages and timing headers
+    // WARNING: Disable in production! Exposes sensitive information
+    'debug_mode' => $_ENV['APP_ENV'] !== 'production',
     
-    $this->assertEquals(200, $response->getStatusCode());
-    $this->assertStringContainsString('users', (string)$response->getBody());
-}
-```
-
-### Testing Middleware
-
-```php
-public function testMiddleware(): void
-{
-    Router::get('/protected', function() {
-        return ['protected' => true];
-    }, [
-        'middleware' => [TestMiddleware::class]
-    ]);
+    // ============================================
+    // Performance & Caching
+    // ============================================
     
-    $request = new ServerRequest('GET', '/protected');
-    $response = Router::handle($request);
+    // Enable route caching for production (significant performance boost)
+    // Automatically disabled when debug_mode is true
+    'cache_enabled' => $_ENV['APP_ENV'] === 'production',
     
-    $this->assertTrue($response->hasHeader('X-Test-Middleware'));
-}
-```
-
-## Advanced Usage
-
-### Programmatic Route Registration
-
-```php
-Router::registerRoutes([
-    [
-        'method' => 'GET',
-        'path' => '/users',
-        'class' => UserController::class,
-        'handler' => 'index',
-        'middleware' => [AuthMiddleware::class],
-        'name' => 'users.index'
+    // Directory for cache files (defaults to system temp directory)
+    'cache_directory' => __DIR__ . '/storage/cache',
+    
+    // ============================================
+    // Route Loading
+    // ============================================
+    
+    // Directory containing route files (optional)
+    // Set to '/' to define routes programmatically only
+    'routes_directory' => __DIR__ . '/routes',
+    
+    // ============================================
+    // Domain Security
+    // ============================================
+    
+    // Reject requests from domains not in allowed_domains
+    'enforce_domain' => true,
+    
+    // Array of allowed domains (supports patterns like {tenant}.example.com)
+    'allowed_domains' => [
+        'example.com',
+        'api.example.com',
+        'admin.example.com',
+        '{tenant}.example.com',
     ],
-    [
-        'method' => 'POST',
-        'path' => '/users',
-        'class' => UserController::class,
-        'handler' => 'store',
-        'middleware' => [AuthMiddleware::class],
-        'name' => 'users.store'
+    
+    // ============================================
+    // Middleware
+    // ============================================
+    
+    // Global middleware applied to ALL routes
+    // Executes before group and route middleware
+    'global_middleware' => [
+        CorsMiddleware::class,
+        LoggingMiddleware::class,
+        SecurityHeadersMiddleware::class,
+    ],
+    
+    // ============================================
+    // Dependency Injection
+    // ============================================
+    
+    // PSR-11 container for dependency injection
+    // Controllers and middleware will be resolved from the container
+    'container' => $container,
+    
+    // ============================================
+    // Error Handling
+    // ============================================
+    
+    // Custom error formatter (must implement ErrorFormatterInterface)
+    // Defaults to JSON error formatter
+    'error_formatter' => new CustomErrorFormatter(),
+]);
+```
+
+### Environment-Based Configuration
+
+```php
+// Load environment variables
+$isProduction = $_ENV['APP_ENV'] === 'production';
+$isDebug = $_ENV['APP_DEBUG'] === 'true';
+
+Router::configure([
+    'debug_mode' => $isDebug && !$isProduction,
+    'cache_enabled' => $isProduction,
+    'cache_directory' => $_ENV['CACHE_DIR'] ?? __DIR__ . '/cache',
+    'enforce_domain' => $isProduction,
+    'allowed_domains' => explode(',', $_ENV['ALLOWED_DOMAINS'] ?? ''),
+]);
+```
+
+### Minimal Configuration
+
+For simple applications, you can skip configuration entirely:
+
+```php
+// No configuration needed - uses sensible defaults
+Router::get('/', function () {
+    return ['message' => 'Hello, World!'];
+});
+```
+
+### Development vs Production
+
+**Development:**
+
+```php
+Router::configure([
+    'debug_mode' => true,        // Detailed errors
+    'cache_enabled' => false,    // No caching for instant updates
+    'enforce_domain' => false,   // Allow localhost, 127.0.0.1, etc.
+]);
+```
+
+**Production:**
+
+```php
+Router::configure([
+    'debug_mode' => false,       // Hide sensitive information
+    'cache_enabled' => true,     // Cache routes for performance
+    'cache_directory' => '/var/cache/routes',
+    'enforce_domain' => true,    // Security: only allow specific domains
+    'allowed_domains' => [
+        'example.com',
+        'www.example.com',
+        'api.example.com',
+    ],
+    'global_middleware' => [
+        SecurityHeadersMiddleware::class,
+        RateLimitMiddleware::class,
     ],
 ]);
 ```
 
-### Named Routes
+## Debugging
+
+See all registered routes:
 
 ```php
-Router::get('/users/{id}', [UserController::class, 'show'], [
-    'name' => 'users.show'
-]);
+// Print a formatted table
+echo Router::printRoutes();
 
-Router::post('/users', [UserController::class, 'store'], [
-    'name' => 'users.store'
-]);
-
-// Access route names
+// Get routes as array
 $routes = Router::getRoutes();
-foreach ($routes as $route) {
-    echo "Route: {$route['name']}\n";
-}
+
+// Get formatted routes for debugging
+$formatted = Router::getFormattedRoutes();
 ```
 
-### Custom Route Names
+## Real-World Example
 
-```php
-// Automatic naming: get.users.id
-Router::get('/users/{id}', [UserController::class, 'show']);
-
-// Custom naming
-Router::get('/users/{id}', [UserController::class, 'show'], [
-    'name' => 'user.profile'
-]);
-```
-
-## Complete Example
+Here's a more complete example showing how you might structure an API:
 
 ```php
 <?php
@@ -1846,53 +1064,52 @@ Router::get('/users/{id}', [UserController::class, 'show'], [
 require 'vendor/autoload.php';
 
 use ElliePHP\Components\Routing\Router;
-use Nyholm\Psr7\Factory\Psr17Factory;
-use Nyholm\Psr7Server\ServerRequestCreator;
 
-// Configure router
+// Configure
 Router::configure([
-    'debug_mode' => $_ENV['APP_DEBUG'] ?? false,
+    'debug_mode' => $_ENV['APP_ENV'] !== 'production',
     'cache_enabled' => $_ENV['APP_ENV'] === 'production',
-    'cache_directory' => __DIR__ . '/storage/cache',
+    'cache_directory' => __DIR__ . '/cache',
 ]);
 
-// Define routes
-Router::get('/', function() {
-    return ['message' => 'Welcome to the API'];
+// Public routes
+Router::get('/', function () {
+    return ['message' => 'Welcome to our API'];
 });
 
-Router::group(['prefix' => '/api/v1'], function() {
-    // Public routes
-    Router::post('/auth/login', [AuthController::class, 'login']);
-    Router::post('/auth/register', [AuthController::class, 'register']);
-    
-    // Protected routes
-    Router::group(['middleware' => [AuthMiddleware::class]], function() {
-        Router::get('/profile', [ProfileController::class, 'show']);
-        Router::put('/profile', [ProfileController::class, 'update']);
+Router::get('/health', function () {
+    return ['status' => 'healthy'];
+});
+
+// API v1 routes
+Router::prefix('/api/v1')
+    ->middleware([ApiMiddleware::class])
+    ->name('api.v1')
+    ->group(function () {
         
-        // Admin routes
-        Router::group([
-            'prefix' => '/admin',
-            'middleware' => [AdminMiddleware::class]
-        ], function() {
-            Router::get('/users', [AdminController::class, 'users']);
-            Router::get('/stats', [AdminController::class, 'stats']);
-        });
+        // Public endpoints
+        Router::get('/products', [ProductController::class, 'index']);
+        Router::get('/products/{id}', [ProductController::class, 'show']);
+        
+        // Protected endpoints
+        Router::middleware([AuthMiddleware::class])
+            ->group(function () {
+                Router::post('/products', [ProductController::class, 'store']);
+                Router::put('/products/{id}', [ProductController::class, 'update']);
+                Router::delete('/products/{id}', [ProductController::class, 'destroy']);
+            });
     });
-});
 
-// Create PSR-7 request from globals
-$psr17Factory = new Psr17Factory();
-$creator = new ServerRequestCreator(
-    $psr17Factory,
-    $psr17Factory,
-    $psr17Factory,
-    $psr17Factory
-);
-$request = $creator->fromGlobals();
+// Admin routes
+Router::prefix('/admin')
+    ->middleware([AuthMiddleware::class, AdminMiddleware::class])
+    ->group(function () {
+        Router::get('/dashboard', [AdminController::class, 'dashboard']);
+        Router::get('/users', [AdminController::class, 'users']);
+    });
 
-// Handle request
+// Handle the request
+$request = \Nyholm\Psr7\ServerRequest::fromGlobals();
 $response = Router::handle($request);
 
 // Send response
@@ -1905,17 +1122,1345 @@ foreach ($response->getHeaders() as $name => $values) {
 echo $response->getBody();
 ```
 
+## Tips & Best Practices
+
+1. **Use debug mode during development** - It shows helpful error messages and route tables
+2. **Enable caching in production** - Significantly improves performance
+3. **Organize with groups** - Keep related routes together
+4. **Use controllers for complex logic** - Keep route definitions clean
+5. **Apply middleware at the group level** - Avoid repetition
+6. **Name your routes** - Makes them easier to reference later
+7. **Disable debug mode in production** - Never expose sensitive information
+
+## What's Next?
+
+- Check out the [examples](examples/) directory for more usage patterns
+- Read about [middleware](examples/middleware-example.php) in depth
+- Learn about [domain routing](examples/domain-routing.php) for multi-tenant apps
+- Explore the [fluent API](examples/fluent-api-example.php) for expressive route definitions
+
 ## Requirements
 
 - PHP 8.4 or higher
-- psr/http-server-middleware ^1.0
-- psr/http-server-handler ^1.0
-- nyholm/psr7 ^1.8
-
-## Resources
-
-- [Examples](examples/) - Working code examples
+- Composer
 
 ## License
 
-MIT License
+MIT License - feel free to use this in your projects!
+
+## Questions or Issues?
+
+- [Report issues](https://github.com/elliephp/routing/issues)
+- [View source](https://github.com/elliephp/routing)
+
+---
+
+Made with ❤️ for the PHP community
+
+
+## Dependency Injection (PSR-11)
+
+ElliePHP Routing supports PSR-11 containers for automatic dependency injection of controllers and middleware.
+
+### Setting Up a Container
+
+```php
+use Psr\Container\ContainerInterface;
+
+// Use any PSR-11 compatible container
+// Examples: PHP-DI, Symfony DependencyInjection, Laravel Container, etc.
+
+$container = new YourPSR11Container();
+
+// Register services
+$container->set(UserRepository::class, function() {
+    return new UserRepository($pdo);
+});
+
+$container->set(UserService::class, function($c) {
+    return new UserService($c->get(UserRepository::class));
+});
+
+// Configure router with container
+Router::configure([
+    'container' => $container
+]);
+```
+
+### Controller Dependency Injection
+
+Controllers are automatically resolved from the container with their dependencies:
+
+```php
+class UserController
+{
+    // Dependencies are injected via constructor
+    public function __construct(
+        private UserRepository $userRepository,
+        private UserService $userService
+    ) {}
+
+    public function index(ServerRequestInterface $request): array
+    {
+        $users = $this->userRepository->findAll();
+        return ['users' => $users];
+    }
+
+    public function show(ServerRequestInterface $request, string $id): array
+    {
+        // Route parameters are still injected
+        $user = $this->userService->findById((int)$id);
+        return ['user' => $user];
+    }
+}
+
+// Register controller in container
+$container->set(UserController::class, function($c) {
+    return new UserController(
+        $c->get(UserRepository::class),
+        $c->get(UserService::class)
+    );
+});
+
+// Define route - controller will be resolved from container
+Router::get('/users', [UserController::class, 'index']);
+Router::get('/users/{id}', [UserController::class, 'show']);
+```
+
+### Middleware Dependency Injection
+
+Middleware classes are also resolved from the container:
+
+```php
+class AuthMiddleware implements MiddlewareInterface
+{
+    public function __construct(
+        private AuthService $authService,
+        private TokenValidator $tokenValidator
+    ) {}
+
+    public function process(
+        ServerRequestInterface $request,
+        RequestHandlerInterface $handler
+    ): ResponseInterface {
+        $token = $request->getHeaderLine('Authorization');
+        
+        if (!$this->tokenValidator->validate($token)) {
+            // Return 401
+        }
+        
+        $user = $this->authService->getUserFromToken($token);
+        // Add user to request attributes
+        $request = $request->withAttribute('user', $user);
+        
+        return $handler->handle($request);
+    }
+}
+
+// Register in container
+$container->set(AuthMiddleware::class, function($c) {
+    return new AuthMiddleware(
+        $c->get(AuthService::class),
+        $c->get(TokenValidator::class)
+    );
+});
+
+// Use in routes
+Router::get('/profile', [ProfileController::class, 'show'])
+    ->middleware([AuthMiddleware::class]);
+```
+
+### Without Container
+
+If no container is configured, classes are instantiated directly:
+
+```php
+// No container configured
+Router::configure([
+    'container' => null  // or omit this option
+]);
+
+// Controllers must have no constructor dependencies
+// or use default values
+class SimpleController
+{
+    public function index(): array
+    {
+        return ['message' => 'Hello'];
+    }
+}
+
+Router::get('/', [SimpleController::class, 'index']);
+```
+
+## Error Handling
+
+ElliePHP Routing provides comprehensive error handling with customizable error formatters.
+
+### Default Error Responses
+
+By default, errors are returned as JSON:
+
+```php
+// 404 Not Found
+{
+    "error": "Route not found: GET /invalid-path",
+    "status": 404
+}
+
+// 405 Method Not Allowed
+{
+    "error": "Method POST not allowed for route: /users",
+    "status": 405
+}
+
+// 500 Internal Server Error
+{
+    "error": "Internal server error",
+    "status": 500
+}
+```
+
+### Debug Mode Errors
+
+When `debug_mode` is enabled, errors include detailed information:
+
+```php
+Router::configure(['debug_mode' => true]);
+
+// Error response includes:
+{
+    "error": "Route not found: GET /invalid",
+    "status": 404,
+    "debug": {
+        "exception": "RouteNotFoundException",
+        "file": "/path/to/file.php",
+        "line": 123,
+        "trace": [...]
+    }
+}
+```
+
+### Custom Error Formatter
+
+Create a custom error formatter for HTML, XML, or custom formats:
+
+```php
+use ElliePHP\Components\Routing\Core\ErrorFormatterInterface;
+
+class HtmlErrorFormatter implements ErrorFormatterInterface
+{
+    public function format(\Throwable $e, bool $debug): array
+    {
+        $status = $e->getCode() >= 100 && $e->getCode() < 600 
+            ? $e->getCode() 
+            : 500;
+
+        $html = "
+            <!DOCTYPE html>
+            <html>
+            <head><title>Error {$status}</title></head>
+            <body>
+                <h1>Error {$status}</h1>
+                <p>{$e->getMessage()}</p>
+            </body>
+            </html>
+        ";
+
+        return [
+            'html' => $html,
+            'status' => $status
+        ];
+    }
+}
+
+// Use custom formatter
+Router::configure([
+    'error_formatter' => new HtmlErrorFormatter()
+]);
+```
+
+### Exception Types
+
+The router throws specific exceptions for different scenarios:
+
+```php
+use ElliePHP\Components\Routing\Exceptions\RouteNotFoundException;
+use ElliePHP\Components\Routing\Exceptions\RouterException;
+use ElliePHP\Components\Routing\Exceptions\MiddlewareNotFoundException;
+use ElliePHP\Components\Routing\Exceptions\ClassNotFoundException;
+
+try {
+    $response = Router::handle($request);
+} catch (RouteNotFoundException $e) {
+    // 404 - Route not found
+} catch (MiddlewareNotFoundException $e) {
+    // Middleware class not found
+} catch (ClassNotFoundException $e) {
+    // Controller class or method not found
+} catch (RouterException $e) {
+    // General router error
+}
+```
+
+## Debugging & Development
+
+ElliePHP Routing includes powerful debugging tools to help during development.
+
+### Debug Mode
+
+Enable debug mode for detailed error messages and timing information:
+
+```php
+Router::configure([
+    'debug_mode' => true
+]);
+
+// Responses include debug headers:
+// X-Debug-Time: 15.23ms
+// X-Debug-Routes: 42
+// X-FRV: ElliePHP Router
+```
+
+### Route Table
+
+View all registered routes in a formatted table:
+
+```php
+// Print route table to output
+echo Router::printRoutes();
+
+// Output:
+// ┌────────┬─────────────────────┬──────────────────┬────────────┐
+// │ Method │ Path                │ Handler          │ Name       │
+// ├────────┼─────────────────────┼──────────────────┼────────────┤
+// │ GET    │ /                   │ Closure          │ get.root   │
+// │ GET    │ /users              │ UserController   │ users      │
+// │ GET    │ /users/{id}         │ UserController   │ users.show │
+// │ POST   │ /users              │ UserController   │ users.store│
+// └────────┴─────────────────────┴──────────────────┴────────────┘
+```
+
+### Get Routes Programmatically
+
+```php
+// Get all routes as array
+$routes = Router::getRoutes();
+
+// Get formatted routes for debugging
+$formatted = Router::getFormattedRoutes();
+
+foreach ($formatted as $route) {
+    echo "{$route['method']} {$route['path']} -> {$route['handler']}\n";
+}
+```
+
+### Check Router State
+
+```php
+// Check if debug mode is enabled
+if (Router::isDebugMode()) {
+    echo "Debug mode is ON\n";
+}
+
+// Check if cache is enabled
+if (Router::isCacheEnabled()) {
+    echo "Cache is enabled\n";
+}
+
+// Get route count
+$count = count(Router::getRoutes());
+echo "Total routes: {$count}\n";
+```
+
+### Clear Cache
+
+```php
+// Clear route cache (useful during development)
+Router::clearCache();
+
+// Or clear cache programmatically
+if ($_GET['clear_cache'] ?? false) {
+    Router::clearCache();
+    echo "Cache cleared!\n";
+}
+```
+
+### Reset Router (Testing)
+
+```php
+// Reset router state (useful for testing)
+Router::reset();
+
+// After reset, you can reconfigure and define new routes
+Router::configure(['debug_mode' => true]);
+Router::get('/', function () {
+    return ['message' => 'New routes'];
+});
+```
+
+## Performance & Caching
+
+ElliePHP Routing is built for speed with multiple performance optimizations.
+
+### Route Caching
+
+Enable caching in production for significant performance improvements:
+
+```php
+Router::configure([
+    'cache_enabled' => true,
+    'cache_directory' => __DIR__ . '/storage/cache'
+]);
+
+// Routes are compiled once and cached
+// Subsequent requests use the cached dispatcher
+// Cache is automatically invalidated when routes change
+```
+
+**Performance Impact:**
+- First request: Routes are compiled and cached (~5-10ms overhead)
+- Subsequent requests: Routes loaded from cache (~0.1-0.5ms)
+- **Result: 10-50x faster route resolution**
+
+### Cache Invalidation
+
+The cache is automatically invalidated when:
+- Routes are added, modified, or removed
+- Route files in `routes_directory` are modified
+- `Router::clearCache()` is called
+
+### Optimization Tips
+
+**1. Use Route Caching in Production:**
+
+```php
+Router::configure([
+    'cache_enabled' => $_ENV['APP_ENV'] === 'production'
+]);
+```
+
+**2. Disable Debug Mode in Production:**
+
+```php
+Router::configure([
+    'debug_mode' => false  // Removes debug overhead
+]);
+```
+
+**3. Use Controller Classes Instead of Closures:**
+
+Closures cannot be cached effectively. Use controller classes for better performance:
+
+```php
+// ❌ Slower (closures can't be fully cached)
+Router::get('/users', function () {
+    return ['users' => []];
+});
+
+// ✅ Faster (controller classes are cached efficiently)
+Router::get('/users', [UserController::class, 'index']);
+```
+
+**4. Minimize Middleware:**
+
+Each middleware adds overhead. Only use necessary middleware:
+
+```php
+// ❌ Too many middleware
+Router::get('/data', [DataController::class, 'index'])
+    ->middleware([
+        Middleware1::class,
+        Middleware2::class,
+        Middleware3::class,
+        Middleware4::class,
+        Middleware5::class,
+    ]);
+
+// ✅ Only essential middleware
+Router::get('/data', [DataController::class, 'index'])
+    ->middleware([AuthMiddleware::class]);
+```
+
+**5. Use Domain-Specific Dispatchers:**
+
+The router creates separate dispatchers for each domain, improving performance for multi-tenant apps:
+
+```php
+// Each domain gets its own optimized dispatcher
+Router::domain('tenant1.example.com')->group(function () {
+    // Routes for tenant1
+});
+
+Router::domain('tenant2.example.com')->group(function () {
+    // Routes for tenant2
+});
+```
+
+### Benchmarks
+
+On a typical application with 100 routes:
+
+| Configuration | First Request | Cached Request | Improvement |
+|--------------|---------------|----------------|-------------|
+| No cache | 8.5ms | 8.5ms | - |
+| With cache | 9.2ms | 0.3ms | **28x faster** |
+
+## Advanced Features
+
+### Route Names
+
+Name your routes for easy reference:
+
+```php
+// Set route name
+Router::get('/users', [UserController::class, 'index'])
+    ->name('users.index');
+
+Router::get('/users/{id}', [UserController::class, 'show'])
+    ->name('users.show');
+
+// Names are automatically generated if not provided
+// Format: {method}.{path}
+// Example: get.users.id
+```
+
+### Loading Routes from Files
+
+Organize routes in separate files:
+
+```php
+// Configure routes directory
+Router::configure([
+    'routes_directory' => __DIR__ . '/routes'
+]);
+
+// Create routes/web.php
+<?php
+$router->get('/', function () {
+    return ['message' => 'Home'];
+});
+
+// Create routes/api.php
+<?php
+$router->group(['prefix' => '/api'], function ($router) {
+    $router->get('/users', [UserController::class, 'index']);
+});
+
+// Routes are automatically loaded from all .php files in the directory
+```
+
+### Non-Facade Usage
+
+Use the `Routing` class directly instead of the static facade:
+
+```php
+use ElliePHP\Components\Routing\Core\Routing;
+
+// Create instance
+$router = new Routing(
+    routes_directory: '/',
+    debugMode: true,
+    cacheEnabled: false,
+    cacheDirectory: null,
+    errorFormatter: null,
+    enforceDomain: false,
+    allowedDomains: [],
+    globalMiddleware: [],
+    container: null
+);
+
+// Define routes
+$router->get('/', function () {
+    return ['message' => 'Hello'];
+});
+
+// Handle request
+$response = $router->handle($request);
+```
+
+**Benefits:**
+- Better for testing (no global state)
+- Multiple router instances
+- Explicit dependencies
+- Easier to mock
+
+### Programmatic Route Registration
+
+Register routes from arrays:
+
+```php
+$routes = [
+    [
+        'method' => 'GET',
+        'path' => '/users',
+        'handler' => [UserController::class, 'index'],
+        'middleware' => [AuthMiddleware::class],
+        'name' => 'users.index'
+    ],
+    [
+        'method' => 'POST',
+        'path' => '/users',
+        'handler' => [UserController::class, 'store'],
+        'middleware' => [AuthMiddleware::class],
+        'name' => 'users.store'
+    ],
+];
+
+Router::registerRoutes($routes);
+```
+
+### Custom Response Types
+
+Return different response types from handlers:
+
+```php
+use Nyholm\Psr7\Response;
+
+// Return array (automatically converted to JSON)
+Router::get('/json', function () {
+    return ['message' => 'JSON response'];
+});
+
+// Return PSR-7 Response directly
+Router::get('/custom', function () {
+    return new Response(
+        200,
+        ['Content-Type' => 'text/plain'],
+        'Plain text response'
+    );
+});
+
+// Return HTML
+Router::get('/html', function () {
+    $html = '<html><body><h1>Hello</h1></body></html>';
+    return new Response(200, ['Content-Type' => 'text/html'], $html);
+});
+```
+
+
+
+## Complete Examples
+
+### Example 1: Simple API
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use ElliePHP\Components\Routing\Router;
+use Nyholm\Psr7\ServerRequest;
+
+// Configure
+Router::configure([
+    'debug_mode' => true
+]);
+
+// Routes
+Router::get('/', function () {
+    return [
+        'name' => 'My API',
+        'version' => '1.0.0',
+        'endpoints' => [
+            'GET /' => 'API information',
+            'GET /users' => 'List users',
+            'GET /users/{id}' => 'Get user by ID',
+        ]
+    ];
+});
+
+Router::get('/users', function () {
+    return [
+        'users' => [
+            ['id' => 1, 'name' => 'Alice'],
+            ['id' => 2, 'name' => 'Bob'],
+        ]
+    ];
+});
+
+Router::get('/users/{id}', function ($request, $params) {
+    return [
+        'user' => [
+            'id' => $params['id'],
+            'name' => 'User ' . $params['id']
+        ]
+    ];
+});
+
+// Handle request
+$request = ServerRequest::fromGlobals();
+$response = Router::handle($request);
+
+// Send response
+http_response_code($response->getStatusCode());
+header('Content-Type: application/json');
+echo $response->getBody();
+```
+
+### Example 2: RESTful API with Controllers
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use ElliePHP\Components\Routing\Router;
+use Psr\Http\Message\ServerRequestInterface;
+
+// Controller
+class UserController
+{
+    public function index(ServerRequestInterface $request): array
+    {
+        return ['users' => [/* ... */]];
+    }
+
+    public function show(ServerRequestInterface $request, string $id): array
+    {
+        return ['user' => ['id' => $id]];
+    }
+
+    public function store(ServerRequestInterface $request): array
+    {
+        $data = json_decode($request->getBody()->getContents(), true);
+        return ['message' => 'User created', 'data' => $data];
+    }
+
+    public function update(ServerRequestInterface $request, string $id): array
+    {
+        $data = json_decode($request->getBody()->getContents(), true);
+        return ['message' => 'User updated', 'id' => $id, 'data' => $data];
+    }
+
+    public function destroy(ServerRequestInterface $request, string $id): array
+    {
+        return ['message' => 'User deleted', 'id' => $id];
+    }
+}
+
+// Configure
+Router::configure(['debug_mode' => true]);
+
+// RESTful routes
+Router::get('/users', [UserController::class, 'index']);
+Router::get('/users/{id}', [UserController::class, 'show']);
+Router::post('/users', [UserController::class, 'store']);
+Router::put('/users/{id}', [UserController::class, 'update']);
+Router::delete('/users/{id}', [UserController::class, 'destroy']);
+
+// Handle request
+$request = \Nyholm\Psr7\ServerRequest::fromGlobals();
+$response = Router::handle($request);
+
+// Send response
+http_response_code($response->getStatusCode());
+foreach ($response->getHeaders() as $name => $values) {
+    foreach ($values as $value) {
+        header("$name: $value", false);
+    }
+}
+echo $response->getBody();
+```
+
+### Example 3: API with Middleware & Groups
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use ElliePHP\Components\Routing\Router;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
+
+// Middleware
+class AuthMiddleware implements MiddlewareInterface
+{
+    public function process(
+        ServerRequestInterface $request,
+        RequestHandlerInterface $handler
+    ): ResponseInterface {
+        $token = $request->getHeaderLine('Authorization');
+        
+        if (empty($token)) {
+            $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+            return $factory->createResponse(401)
+                ->withHeader('Content-Type', 'application/json')
+                ->withBody($factory->createStream(json_encode([
+                    'error' => 'Unauthorized'
+                ])));
+        }
+        
+        return $handler->handle($request);
+    }
+}
+
+class ApiMiddleware implements MiddlewareInterface
+{
+    public function process(
+        ServerRequestInterface $request,
+        RequestHandlerInterface $handler
+    ): ResponseInterface {
+        return $handler->handle($request)
+            ->withHeader('X-API-Version', '1.0.0');
+    }
+}
+
+// Configure
+Router::configure([
+    'debug_mode' => true,
+    'global_middleware' => [ApiMiddleware::class]
+]);
+
+// Public routes
+Router::get('/', function () {
+    return ['message' => 'Welcome to the API'];
+});
+
+Router::get('/health', function () {
+    return ['status' => 'healthy'];
+});
+
+// Protected API routes
+Router::prefix('/api')
+    ->middleware([AuthMiddleware::class])
+    ->group(function () {
+        Router::get('/users', function () {
+            return ['users' => []];
+        });
+        
+        Router::get('/posts', function () {
+            return ['posts' => []];
+        });
+        
+        Router::post('/posts', function ($request) {
+            return ['message' => 'Post created'];
+        });
+    });
+
+// Handle request
+$request = \Nyholm\Psr7\ServerRequest::fromGlobals();
+$response = Router::handle($request);
+
+// Send response
+http_response_code($response->getStatusCode());
+foreach ($response->getHeaders() as $name => $values) {
+    foreach ($values as $value) {
+        header("$name: $value", false);
+    }
+}
+echo $response->getBody();
+```
+
+### Example 4: Multi-Tenant SaaS Application
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use ElliePHP\Components\Routing\Router;
+
+// Configure with domain enforcement
+Router::configure([
+    'debug_mode' => false,
+    'cache_enabled' => true,
+    'enforce_domain' => true,
+    'allowed_domains' => [
+        'app.example.com',
+        '{tenant}.example.com',
+    ]
+]);
+
+// Main application (app.example.com)
+Router::domain('app.example.com')->group(function () {
+    Router::get('/', function () {
+        return ['page' => 'landing'];
+    });
+    
+    Router::get('/pricing', function () {
+        return ['plans' => []];
+    });
+    
+    Router::post('/signup', function ($request) {
+        return ['message' => 'Account created'];
+    });
+});
+
+// Tenant subdomains ({tenant}.example.com)
+Router::domain('{tenant}.example.com')
+    ->middleware([TenantMiddleware::class])
+    ->group(function () {
+        // Dashboard
+        Router::get('/dashboard', function ($request, $params) {
+            return [
+                'tenant' => $params['tenant'],
+                'page' => 'dashboard',
+                'data' => []
+            ];
+        });
+        
+        // Users
+        Router::get('/users', function ($request, $params) {
+            return [
+                'tenant' => $params['tenant'],
+                'users' => []
+            ];
+        });
+        
+        Router::get('/users/{id}', function ($request, $params) {
+            return [
+                'tenant' => $params['tenant'],
+                'user' => ['id' => $params['id']]
+            ];
+        });
+        
+        // Settings
+        Router::get('/settings', function ($request, $params) {
+            return [
+                'tenant' => $params['tenant'],
+                'settings' => []
+            ];
+        });
+    });
+
+// Handle request
+$request = \Nyholm\Psr7\ServerRequest::fromGlobals();
+$response = Router::handle($request);
+
+// Send response
+http_response_code($response->getStatusCode());
+foreach ($response->getHeaders() as $name => $values) {
+    foreach ($values as $value) {
+        header("$name: $value", false);
+    }
+}
+echo $response->getBody();
+```
+
+### Example 5: Production Application with DI Container
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use ElliePHP\Components\Routing\Router;
+use Psr\Container\ContainerInterface;
+
+// Setup container (using PHP-DI as example)
+$containerBuilder = new \DI\ContainerBuilder();
+$containerBuilder->addDefinitions([
+    PDO::class => function() {
+        return new PDO('mysql:host=localhost;dbname=myapp', 'user', 'pass');
+    },
+    UserRepository::class => \DI\autowire(),
+    UserService::class => \DI\autowire(),
+    UserController::class => \DI\autowire(),
+]);
+$container = $containerBuilder->build();
+
+// Configure router
+Router::configure([
+    'debug_mode' => $_ENV['APP_DEBUG'] ?? false,
+    'cache_enabled' => $_ENV['APP_ENV'] === 'production',
+    'cache_directory' => __DIR__ . '/storage/cache',
+    'container' => $container,
+    'global_middleware' => [
+        CorsMiddleware::class,
+        LoggingMiddleware::class,
+    ],
+]);
+
+// Define routes
+Router::get('/', function () {
+    return ['message' => 'Welcome'];
+});
+
+Router::prefix('/api/v1')
+    ->middleware([ApiMiddleware::class])
+    ->name('api.v1')
+    ->group(function () {
+        // Public endpoints
+        Router::get('/status', function () {
+            return ['status' => 'operational'];
+        });
+        
+        // Protected endpoints
+        Router::middleware([AuthMiddleware::class])->group(function () {
+            Router::get('/users', [UserController::class, 'index']);
+            Router::get('/users/{id}', [UserController::class, 'show']);
+            Router::post('/users', [UserController::class, 'store']);
+            Router::put('/users/{id}', [UserController::class, 'update']);
+            Router::delete('/users/{id}', [UserController::class, 'destroy']);
+        });
+    });
+
+// Handle request
+$request = \Nyholm\Psr7\ServerRequest::fromGlobals();
+$response = Router::handle($request);
+
+// Send response
+http_response_code($response->getStatusCode());
+foreach ($response->getHeaders() as $name => $values) {
+    foreach ($values as $value) {
+        header("$name: $value", false);
+    }
+}
+echo $response->getBody();
+```
+
+## Tips & Best Practices
+
+### 1. Use Debug Mode Only in Development
+
+```php
+// ✅ Good
+Router::configure([
+    'debug_mode' => $_ENV['APP_ENV'] !== 'production'
+]);
+
+// ❌ Bad - exposes sensitive information
+Router::configure([
+    'debug_mode' => true  // Always on!
+]);
+```
+
+### 2. Enable Caching in Production
+
+```php
+// ✅ Good - significant performance boost
+Router::configure([
+    'cache_enabled' => $_ENV['APP_ENV'] === 'production',
+    'cache_directory' => __DIR__ . '/storage/cache'
+]);
+```
+
+### 3. Use Controller Classes for Complex Logic
+
+```php
+// ✅ Good - testable, organized, cacheable
+Router::get('/users', [UserController::class, 'index']);
+
+// ❌ Bad - hard to test, not cacheable
+Router::get('/users', function () {
+    // 50 lines of business logic...
+});
+```
+
+### 4. Apply Middleware at Group Level
+
+```php
+// ✅ Good - DRY, maintainable
+Router::middleware([AuthMiddleware::class])->group(function () {
+    Router::get('/users', [UserController::class, 'index']);
+    Router::get('/posts', [PostController::class, 'index']);
+    Router::get('/comments', [CommentController::class, 'index']);
+});
+
+// ❌ Bad - repetitive
+Router::get('/users', [UserController::class, 'index'])
+    ->middleware([AuthMiddleware::class]);
+Router::get('/posts', [PostController::class, 'index'])
+    ->middleware([AuthMiddleware::class]);
+Router::get('/comments', [CommentController::class, 'index'])
+    ->middleware([AuthMiddleware::class]);
+```
+
+### 5. Use Route Names for Important Routes
+
+```php
+// ✅ Good - easy to reference
+Router::get('/users/{id}', [UserController::class, 'show'])
+    ->name('users.show');
+
+// Later: generate URLs, reference in tests, etc.
+```
+
+### 6. Organize Routes with Groups
+
+```php
+// ✅ Good - organized, clear structure
+Router::prefix('/api/v1')->name('api.v1')->group(function () {
+    Router::prefix('/users')->name('users')->group(function () {
+        Router::get('', [UserController::class, 'index'])->name('index');
+        Router::get('/{id}', [UserController::class, 'show'])->name('show');
+    });
+});
+```
+
+### 7. Use Type Hints in Controllers
+
+```php
+// ✅ Good - type safety, better IDE support
+public function show(ServerRequestInterface $request, string $id): array
+{
+    return ['user' => ['id' => $id]];
+}
+
+// ❌ Bad - no type safety
+public function show($request, $id)
+{
+    return ['user' => ['id' => $id]];
+}
+```
+
+### 8. Handle Errors Gracefully
+
+```php
+// ✅ Good - custom error handling
+try {
+    $response = Router::handle($request);
+} catch (RouteNotFoundException $e) {
+    // Log 404
+    // Return custom 404 page
+} catch (RouterException $e) {
+    // Log error
+    // Return custom error page
+}
+```
+
+## Testing
+
+### Testing with PHPUnit
+
+```php
+use PHPUnit\Framework\TestCase;
+use ElliePHP\Components\Routing\Router;
+use Nyholm\Psr7\ServerRequest;
+
+class RouterTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        // Reset router before each test
+        Router::resetInstance();
+        
+        // Configure for testing
+        Router::configure([
+            'debug_mode' => true,
+            'cache_enabled' => false
+        ]);
+    }
+
+    public function testBasicRoute(): void
+    {
+        Router::get('/test', function () {
+            return ['message' => 'test'];
+        });
+
+        $request = new ServerRequest('GET', '/test');
+        $response = Router::handle($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertStringContainsString('test', (string)$response->getBody());
+    }
+
+    public function testRouteWithParameters(): void
+    {
+        Router::get('/users/{id}', function ($request, $params) {
+            return ['user_id' => $params['id']];
+        });
+
+        $request = new ServerRequest('GET', '/users/123');
+        $response = Router::handle($request);
+
+        $body = json_decode((string)$response->getBody(), true);
+        $this->assertEquals('123', $body['user_id']);
+    }
+
+    public function test404Response(): void
+    {
+        $request = new ServerRequest('GET', '/nonexistent');
+        $response = Router::handle($request);
+
+        $this->assertEquals(404, $response->getStatusCode());
+    }
+}
+```
+
+### Testing with Non-Facade Usage
+
+```php
+use ElliePHP\Components\Routing\Core\Routing;
+
+class RouterTest extends TestCase
+{
+    private Routing $router;
+
+    protected function setUp(): void
+    {
+        // Create fresh instance for each test
+        $this->router = new Routing(
+            routes_directory: '/',
+            debugMode: true,
+            cacheEnabled: false
+        );
+    }
+
+    public function testRoute(): void
+    {
+        $this->router->get('/test', function () {
+            return ['message' => 'test'];
+        });
+
+        $request = new ServerRequest('GET', '/test');
+        $response = $this->router->handle($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+}
+```
+
+## Migration from Other Routers
+
+### From Laravel
+
+```php
+// Laravel
+Route::get('/users', [UserController::class, 'index']);
+Route::post('/users', [UserController::class, 'store']);
+Route::middleware(['auth'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+});
+
+// ElliePHP Routing (very similar!)
+Router::get('/users', [UserController::class, 'index']);
+Router::post('/users', [UserController::class, 'store']);
+Router::middleware([AuthMiddleware::class])->group(function () {
+    Router::get('/dashboard', [DashboardController::class, 'index']);
+});
+```
+
+### From Slim
+
+```php
+// Slim
+$app->get('/users', [UserController::class, 'index']);
+$app->post('/users', [UserController::class, 'store']);
+$app->group('/api', function ($group) {
+    $group->get('/users', [UserController::class, 'index']);
+});
+
+// ElliePHP Routing
+Router::get('/users', [UserController::class, 'index']);
+Router::post('/users', [UserController::class, 'store']);
+Router::prefix('/api')->group(function () {
+    Router::get('/users', [UserController::class, 'index']);
+});
+```
+
+## Troubleshooting
+
+### Routes Not Found
+
+**Problem:** 404 errors for routes that should exist.
+
+**Solutions:**
+1. Check route definition syntax
+2. Verify route is registered before handling request
+3. Clear cache: `Router::clearCache()`
+4. Enable debug mode to see registered routes: `Router::printRoutes()`
+
+### Middleware Not Executing
+
+**Problem:** Middleware doesn't seem to run.
+
+**Solutions:**
+1. Verify middleware implements `MiddlewareInterface`
+2. Check middleware is registered correctly
+3. Ensure middleware calls `$handler->handle($request)`
+4. Check middleware order (global → group → route)
+
+### Controller Not Found
+
+**Problem:** `ClassNotFoundException` when using controllers.
+
+**Solutions:**
+1. Verify class exists and is autoloaded
+2. Check namespace is correct
+3. Ensure method exists in controller
+4. If using container, verify controller is registered
+
+### Cache Issues
+
+**Problem:** Changes to routes not reflected.
+
+**Solutions:**
+1. Clear cache: `Router::clearCache()`
+2. Disable cache during development: `'cache_enabled' => false`
+3. Check cache directory permissions
+4. Verify cache directory path is correct
+
+### Domain Routing Not Working
+
+**Problem:** Domain-specific routes return 404.
+
+**Solutions:**
+1. Check domain pattern syntax
+2. Verify request host matches domain pattern
+3. Disable domain enforcement during testing: `'enforce_domain' => false`
+4. Check allowed domains list
+
+## FAQ
+
+**Q: Can I use this without the static facade?**  
+A: Yes! Use the `Routing` class directly. See [Non-Facade Usage](#non-facade-usage).
+
+**Q: Does it support route caching?**  
+A: Yes! Enable with `'cache_enabled' => true`. See [Performance & Caching](#performance--caching).
+
+**Q: Can I use my own PSR-11 container?**  
+A: Yes! Any PSR-11 compatible container works. See [Dependency Injection](#dependency-injection-psr-11).
+
+**Q: How do I handle file uploads?**  
+A: Access uploaded files via PSR-7 request: `$request->getUploadedFiles()`.
+
+**Q: Can I return HTML instead of JSON?**  
+A: Yes! Return a PSR-7 Response with HTML content. See [Custom Response Types](#custom-response-types).
+
+**Q: Is it production-ready?**  
+A: Yes! Used in production applications. Enable caching and disable debug mode.
+
+**Q: How do I add CORS support?**  
+A: Create a CORS middleware. See [Middleware Examples](#middleware-examples).
+
+**Q: Can I use it with existing frameworks?**  
+A: Yes! It's framework-agnostic and works standalone or integrated.
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Write tests for new features
+4. Ensure all tests pass
+5. Submit a pull request
+
+## License
+
+MIT License - feel free to use this in your projects!
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/elliephp/routing/issues)
+- **Source:** [GitHub Repository](https://github.com/elliephp/routing)
+- **Documentation:** This README
+
+## Credits
+
+Built with:
+- [FastRoute](https://github.com/nikic/FastRoute) - Fast request router
+- [PSR-7](https://www.php-fig.org/psr/psr-7/) - HTTP message interfaces
+- [PSR-15](https://www.php-fig.org/psr/psr-15/) - HTTP server request handlers
+- [Nyholm PSR-7](https://github.com/Nyholm/psr7) - PSR-7 implementation
+
+---
+
+**Made with ❤️ for the PHP community**
+
+**ElliePHP Routing** - Simple, Fast, Powerful
