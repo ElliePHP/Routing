@@ -5,6 +5,7 @@ namespace ElliePHP\Components\Routing;
 use Closure;
 use ElliePHP\Components\Routing\Core\PendingGroup;
 use ElliePHP\Components\Routing\Core\PendingRoute;
+use ElliePHP\Components\Routing\Core\RouterConfigurationBuilder;
 use ElliePHP\Components\Routing\Core\Routing as EllieRouter;
 use ElliePHP\Components\Routing\Exceptions\RouterException;
 use Psr\Http\Message\ResponseInterface;
@@ -63,7 +64,10 @@ final class Router
     /**
      * Configure the router before first use
      * 
-     * @param array $config Configuration options:
+     * When called with an array, configures the router using the traditional array-based approach.
+     * When called without parameters, returns a RouterConfigurationBuilder for fluent configuration.
+     * 
+     * @param array|null $config Configuration options (optional):
      *   - routes_directory: Directory containing route files
      *   - debug_mode: Enable debug mode with detailed errors and timing
      *   - cache_enabled: Enable route caching for production
@@ -74,14 +78,21 @@ final class Router
      *   - global_middleware: Array of middleware classes to apply to all routes
      *   - container: PSR-11 container for dependency injection
      * 
+     * @return RouterConfigurationBuilder|void Returns builder for fluent configuration when no parameters provided
      * @throws RouterException
      */
-    public static function configure(array $config): void
+    public static function configure(?array $config = null)
     {
         if (self::$instance !== null) {
             throw new RouterException("Cannot configure router after it has been initialized");
         }
         
+        // If no config provided, return fluent configuration builder
+        if ($config === null) {
+            return new RouterConfigurationBuilder();
+        }
+        
+        // Traditional array-based configuration
         // Security: Warn if debug mode is enabled
         if (isset($config['debug_mode']) && $config['debug_mode'] === true) {
             if ((isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') || getenv('APP_ENV') === 'production') {
@@ -115,6 +126,16 @@ final class Router
         }
 
         return self::$instance;
+    }
+
+    /**
+     * Get current router configuration
+     * 
+     * @return array Current configuration array
+     */
+    public static function getConfig(): array
+    {
+        return self::$config;
     }
 
     /**

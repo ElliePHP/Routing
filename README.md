@@ -1,23 +1,23 @@
 # ElliePHP Routing
 
-A lightweight, blazing-fast PHP routing library built for modern applications. Based on FastRoute and PSR standards, it gives you everything you need to handle HTTP requests elegantly without the bloat.
+A lightweight, high-performance PHP routing library built for modern applications. Based on FastRoute and PSR standards, it provides everything you need to handle HTTP requests elegantly without unnecessary complexity.
 
 ## Why Choose ElliePHP Routing?
 
-- **⚡ Blazing Fast** - Built on FastRoute with intelligent caching and optimized dispatcher
-- **🎯 Simple & Intuitive** - Define routes in seconds with clean, expressive syntax
-- **📦 Standards-Based** - Full PSR-7 (HTTP messages) and PSR-15 (middleware) compliance
-- **🔧 Flexible** - Use closures, controllers, or mix both - whatever fits your style
-- **🛡️ Middleware Support** - Stack middleware for authentication, logging, CORS, and more
-- **🌐 Multi-Tenant Ready** - Built-in subdomain and domain-based routing with parameter extraction
-- **🎨 Fluent API** - Expressive method chaining for readable route definitions
-- **📊 Debug Tools** - Route tables, timing headers, and detailed error messages
-- **💉 DI Container** - PSR-11 container integration for dependency injection
-- **🚀 Production Ready** - Route caching, domain enforcement, and security features
+- **High Performance** - Built on FastRoute with intelligent caching and optimized dispatcher
+- **Simple and Intuitive** - Define routes quickly with clean, expressive syntax
+- **Standards-Based** - Full PSR-7 (HTTP messages) and PSR-15 (middleware) compliance
+- **Flexible** - Use closures, controllers, or mix both - whatever fits your style
+- **Middleware Support** - Stack middleware for authentication, logging, CORS, and more
+- **Multi-Tenant Ready** - Built-in subdomain and domain-based routing with parameter extraction
+- **Fluent API** - Expressive method chaining for readable route definitions
+- **Debug Tools** - Route tables, timing headers, and detailed error messages
+- **DI Container** - PSR-11 container integration for dependency injection
+- **Production Ready** - Route caching, domain enforcement, and security features
 
 ## Requirements
 
-- PHP 8.4 or higher
+- PHP 8.1 or higher
 - Composer
 
 ## Installation
@@ -47,7 +47,7 @@ composer require elliephp/routing
 
 ## Quick Start
 
-Here's a complete working example to get you started in 30 seconds:
+Here's a complete working example to get you started:
 
 ```php
 <?php
@@ -85,7 +85,7 @@ foreach ($response->getHeaders() as $name => $values) {
 echo $response->getBody();
 ```
 
-That's it! You've got a working API router.
+That's it! You have a working API router.
 
 ## Basic Usage
 
@@ -136,7 +136,7 @@ Router::get('/posts/{id}', function ($request, $params) {
     return ['post_id' => $postId, 'query' => $queryParams];
 });
 
-// Just params (if you don't need the request)
+// Using both request and parameters
 Router::get('/users/{id}', function ($request, $params) {
     return ['user_id' => $params['id']];
 });
@@ -173,7 +173,7 @@ Router::put('/users/{id}/posts/{postId}', function ($request, $params) {
 
 **Parameter Patterns:**
 
-Parameters use FastRoute's powerful pattern matching:
+Parameters use FastRoute's pattern matching system:
 
 ```php
 // Numeric only
@@ -181,7 +181,7 @@ Router::get('/users/{id:\d+}', function ($request, $params) {
     return ['user_id' => (int)$params['id']];
 });
 
-// Custom regex
+// Custom regex patterns
 Router::get('/posts/{slug:[a-z-]+}', function ($request, $params) {
     return ['slug' => $params['slug']];
 });
@@ -245,7 +245,7 @@ class PostController
         return ['post_id' => $id];
     }
 
-    // Multiple parameters work too
+    // Multiple parameters are supported
     public function showComment(
         ServerRequestInterface $request,
         string $postId,
@@ -290,10 +290,10 @@ Groups support multiple configuration options:
 
 ```php
 Router::group([
-    'prefix' => '/api/v1',           // URL prefix
+    'prefix' => '/api/v1',                    // URL prefix
     'middleware' => [AuthMiddleware::class],  // Shared middleware
-    'name' => 'api.v1',              // Route name prefix
-    'domain' => 'api.example.com'    // Domain constraint
+    'name' => 'api.v1',                      // Route name prefix
+    'domain' => 'api.example.com'            // Domain constraint
 ], function () {
     Router::get('/users', function () {
         return ['users' => []];
@@ -303,7 +303,7 @@ Router::group([
 
 ### Nested Groups
 
-Groups can be nested infinitely for complex structures:
+Groups can be nested for complex structures:
 
 ```php
 Router::group(['prefix' => '/api'], function () {
@@ -359,7 +359,7 @@ Router::group([
 
 ## Fluent API (Method Chaining)
 
-The fluent API provides an expressive, readable alternative to array-based configuration. It supports method chaining in any order and offers better IDE autocomplete support.
+The fluent API provides an expressive, readable alternative to array-based configuration. It supports method chaining in any order and provides better IDE autocomplete support.
 
 ### Fluent Routes
 
@@ -373,7 +373,7 @@ Router::get('/dashboard', function () {
     ->middleware([AuthMiddleware::class])
     ->name('dashboard');
 
-// Order doesn't matter - these are equivalent
+// Method order is flexible - these are equivalent
 Router::get('/users', function () {
     return ['users' => []];
 })
@@ -435,7 +435,7 @@ Router::name('blog')
 
 ### Multiple Middleware Calls
 
-Call `middleware()` multiple times to merge middleware arrays:
+Call `middleware()` multiple times to add middleware:
 
 ```php
 Router::get('/admin/reports', function () {
@@ -471,7 +471,7 @@ $route->name('api.data');
 
 ### Mixing Syntaxes
 
-The fluent API and array syntax can be mixed freely in the same application:
+The fluent API and array syntax can be used together in the same application:
 
 ```php
 Router::prefix('/mixed')->group(function () {
@@ -488,12 +488,12 @@ Router::prefix('/mixed')->group(function () {
     ]);
 });
 
-// Both work seamlessly together!
+// Both work seamlessly together
 ```
 
 ## Middleware
 
-Middleware provides a powerful way to filter, modify, or inspect HTTP requests and responses. ElliePHP Routing fully supports PSR-15 middleware with both class-based and closure-based implementations.
+Middleware provides a way to filter, modify, or inspect HTTP requests and responses. ElliePHP Routing fully supports PSR-15 middleware with both class-based and closure-based implementations.
 
 ### Creating PSR-15 Middleware
 
@@ -567,7 +567,7 @@ Router::group([
         return ['users' => []];
     });
     
-    // This route has group middleware + additional middleware
+    // This route has group middleware plus additional middleware
     Router::get('/posts', function () {
         return ['posts' => []];
     }, [
@@ -719,7 +719,7 @@ Router::group(['middleware' => [GroupMiddleware::class]], function () {  // Exec
 
 ## Domain Routing
 
-ElliePHP Routing provides powerful domain-based routing for multi-tenant applications, API subdomains, and domain-specific functionality.
+ElliePHP Routing provides domain-based routing for multi-tenant applications, API subdomains, and domain-specific functionality.
 
 ### Basic Domain Constraints
 
@@ -902,24 +902,22 @@ Router::domain('{tenant}.example.com')
 
 ## Configuration
 
-Configure the router before defining routes using `Router::configure()`. Configuration must be done before the router is first used.
+Configure the router before defining routes using `Router::configure()`. Configuration should be done before the router is first used.
 
-### All Configuration Options
+### Array-Based Configuration
+
+The traditional way to configure the router using an array:
+
+### Configuration Options
 
 ```php
 Router::configure([
-    // ============================================
     // Development & Debugging
-    // ============================================
-    
     // Enable detailed error messages and timing headers
-    // WARNING: Disable in production! Exposes sensitive information
+    // WARNING: Disable in production - exposes sensitive information
     'debug_mode' => $_ENV['APP_ENV'] !== 'production',
     
-    // ============================================
     // Performance & Caching
-    // ============================================
-    
     // Enable route caching for production (significant performance boost)
     // Automatically disabled when debug_mode is true
     'cache_enabled' => $_ENV['APP_ENV'] === 'production',
@@ -927,18 +925,12 @@ Router::configure([
     // Directory for cache files (defaults to system temp directory)
     'cache_directory' => __DIR__ . '/storage/cache',
     
-    // ============================================
     // Route Loading
-    // ============================================
-    
     // Directory containing route files (optional)
     // Set to '/' to define routes programmatically only
     'routes_directory' => __DIR__ . '/routes',
     
-    // ============================================
     // Domain Security
-    // ============================================
-    
     // Reject requests from domains not in allowed_domains
     'enforce_domain' => true,
     
@@ -950,10 +942,7 @@ Router::configure([
         '{tenant}.example.com',
     ],
     
-    // ============================================
     // Middleware
-    // ============================================
-    
     // Global middleware applied to ALL routes
     // Executes before group and route middleware
     'global_middleware' => [
@@ -962,22 +951,34 @@ Router::configure([
         SecurityHeadersMiddleware::class,
     ],
     
-    // ============================================
     // Dependency Injection
-    // ============================================
-    
     // PSR-11 container for dependency injection
     // Controllers and middleware will be resolved from the container
     'container' => $container,
     
-    // ============================================
     // Error Handling
-    // ============================================
-    
     // Custom error formatter (must implement ErrorFormatterInterface)
     // Defaults to JSON error formatter
     'error_formatter' => new CustomErrorFormatter(),
 ]);
+```
+
+### Fluent Configuration
+
+Use the fluent configuration builder for a more expressive approach:
+
+```php
+Router::configure()
+    ->debugMode($_ENV['APP_ENV'] !== 'production')
+    ->enableCache()
+    ->cacheDirectory(__DIR__ . '/storage/cache')
+    ->routesDirectory(__DIR__ . '/routes')
+    ->enforceDomain()
+    ->allowedDomains(['example.com', 'api.example.com'])
+    ->addGlobalMiddleware(CorsMiddleware::class)
+    ->addGlobalMiddleware(LoggingMiddleware::class)
+    ->container($container)
+    ->build();
 ```
 
 ### Environment-Based Configuration
@@ -998,7 +999,7 @@ Router::configure([
 
 ### Minimal Configuration
 
-For simple applications, you can skip configuration entirely:
+For simple applications, you can skip configuration:
 
 ```php
 // No configuration needed - uses sensible defaults
@@ -1124,7 +1125,7 @@ echo $response->getBody();
 
 ## Tips & Best Practices
 
-1. **Use debug mode during development** - It shows helpful error messages and route tables
+1. **Use debug mode during development** - Shows helpful error messages and route tables
 2. **Enable caching in production** - Significantly improves performance
 3. **Organize with groups** - Keep related routes together
 4. **Use controllers for complex logic** - Keep route definitions clean
@@ -1136,7 +1137,7 @@ echo $response->getBody();
 
 - Check out the [examples](examples/) directory for more usage patterns
 - Read about [middleware](examples/middleware-example.php) in depth
-- Learn about [domain routing](examples/domain-routing.php) for multi-tenant apps
+- Learn about [domain routing](examples/domain-routing.php) for multi-tenant applications
 - Explore the [fluent API](examples/fluent-api-example.php) for expressive route definitions
 
 ## Requirements
@@ -1146,7 +1147,7 @@ echo $response->getBody();
 
 ## License
 
-MIT License - feel free to use this in your projects!
+MIT License - feel free to use this in your projects.
 
 ## Questions or Issues?
 
@@ -1155,7 +1156,7 @@ MIT License - feel free to use this in your projects!
 
 ---
 
-Made with ❤️ for the PHP community
+Made for the PHP community
 
 
 ## Dependency Injection (PSR-11)
@@ -1519,9 +1520,9 @@ Router::configure([
 ```
 
 **Performance Impact:**
-- First request: Routes are compiled and cached (~5-10ms overhead)
-- Subsequent requests: Routes loaded from cache (~0.1-0.5ms)
-- **Result: 10-50x faster route resolution**
+- First request: Routes are compiled and cached (5-10ms overhead)
+- Subsequent requests: Routes loaded from cache (0.1-0.5ms)
+- Result: 10-50x faster route resolution
 
 ### Cache Invalidation
 
@@ -1553,12 +1554,12 @@ Router::configure([
 Closures cannot be cached effectively. Use controller classes for better performance:
 
 ```php
-// ❌ Slower (closures can't be fully cached)
+// Slower (closures can't be fully cached)
 Router::get('/users', function () {
     return ['users' => []];
 });
 
-// ✅ Faster (controller classes are cached efficiently)
+// Faster (controller classes are cached efficiently)
 Router::get('/users', [UserController::class, 'index']);
 ```
 
@@ -1567,7 +1568,7 @@ Router::get('/users', [UserController::class, 'index']);
 Each middleware adds overhead. Only use necessary middleware:
 
 ```php
-// ❌ Too many middleware
+// Too many middleware
 Router::get('/data', [DataController::class, 'index'])
     ->middleware([
         Middleware1::class,
@@ -1577,14 +1578,14 @@ Router::get('/data', [DataController::class, 'index'])
         Middleware5::class,
     ]);
 
-// ✅ Only essential middleware
+// Only essential middleware
 Router::get('/data', [DataController::class, 'index'])
     ->middleware([AuthMiddleware::class]);
 ```
 
 **5. Use Domain-Specific Dispatchers:**
 
-The router creates separate dispatchers for each domain, improving performance for multi-tenant apps:
+The router creates separate dispatchers for each domain, improving performance for multi-tenant applications:
 
 ```php
 // Each domain gets its own optimized dispatcher
@@ -1604,7 +1605,7 @@ On a typical application with 100 routes:
 | Configuration | First Request | Cached Request | Improvement |
 |--------------|---------------|----------------|-------------|
 | No cache | 8.5ms | 8.5ms | - |
-| With cache | 9.2ms | 0.3ms | **28x faster** |
+| With cache | 9.2ms | 0.3ms | 28x faster |
 
 ## Advanced Features
 
@@ -2118,12 +2119,12 @@ echo $response->getBody();
 ### 1. Use Debug Mode Only in Development
 
 ```php
-// ✅ Good
+// Good
 Router::configure([
     'debug_mode' => $_ENV['APP_ENV'] !== 'production'
 ]);
 
-// ❌ Bad - exposes sensitive information
+// Bad - exposes sensitive information
 Router::configure([
     'debug_mode' => true  // Always on!
 ]);
@@ -2132,7 +2133,7 @@ Router::configure([
 ### 2. Enable Caching in Production
 
 ```php
-// ✅ Good - significant performance boost
+// Good - significant performance boost
 Router::configure([
     'cache_enabled' => $_ENV['APP_ENV'] === 'production',
     'cache_directory' => __DIR__ . '/storage/cache'
@@ -2142,10 +2143,10 @@ Router::configure([
 ### 3. Use Controller Classes for Complex Logic
 
 ```php
-// ✅ Good - testable, organized, cacheable
+// Good - testable, organized, cacheable
 Router::get('/users', [UserController::class, 'index']);
 
-// ❌ Bad - hard to test, not cacheable
+// Bad - hard to test, not cacheable
 Router::get('/users', function () {
     // 50 lines of business logic...
 });
@@ -2154,14 +2155,14 @@ Router::get('/users', function () {
 ### 4. Apply Middleware at Group Level
 
 ```php
-// ✅ Good - DRY, maintainable
+// Good - DRY, maintainable
 Router::middleware([AuthMiddleware::class])->group(function () {
     Router::get('/users', [UserController::class, 'index']);
     Router::get('/posts', [PostController::class, 'index']);
     Router::get('/comments', [CommentController::class, 'index']);
 });
 
-// ❌ Bad - repetitive
+// Bad - repetitive
 Router::get('/users', [UserController::class, 'index'])
     ->middleware([AuthMiddleware::class]);
 Router::get('/posts', [PostController::class, 'index'])
@@ -2173,7 +2174,7 @@ Router::get('/comments', [CommentController::class, 'index'])
 ### 5. Use Route Names for Important Routes
 
 ```php
-// ✅ Good - easy to reference
+// Good - easy to reference
 Router::get('/users/{id}', [UserController::class, 'show'])
     ->name('users.show');
 
@@ -2183,7 +2184,7 @@ Router::get('/users/{id}', [UserController::class, 'show'])
 ### 6. Organize Routes with Groups
 
 ```php
-// ✅ Good - organized, clear structure
+// Good - organized, clear structure
 Router::prefix('/api/v1')->name('api.v1')->group(function () {
     Router::prefix('/users')->name('users')->group(function () {
         Router::get('', [UserController::class, 'index'])->name('index');
@@ -2195,13 +2196,13 @@ Router::prefix('/api/v1')->name('api.v1')->group(function () {
 ### 7. Use Type Hints in Controllers
 
 ```php
-// ✅ Good - type safety, better IDE support
+// Good - type safety, better IDE support
 public function show(ServerRequestInterface $request, string $id): array
 {
     return ['user' => ['id' => $id]];
 }
 
-// ❌ Bad - no type safety
+// Bad - no type safety
 public function show($request, $id)
 {
     return ['user' => ['id' => $id]];
@@ -2211,7 +2212,7 @@ public function show($request, $id)
 ### 8. Handle Errors Gracefully
 
 ```php
-// ✅ Good - custom error handling
+// Good - custom error handling
 try {
     $response = Router::handle($request);
 } catch (RouteNotFoundException $e) {
@@ -2463,4 +2464,4 @@ Built with:
 
 **Made with ❤️ for the PHP community**
 
-**ElliePHP Routing** - Simple, Fast, Powerful
+**ElliePHP Routing** - Simple, Fast, Reliable

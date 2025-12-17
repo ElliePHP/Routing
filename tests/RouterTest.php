@@ -230,4 +230,95 @@ class RouterTest extends TestCase
         Router::reset();
         $this->assertCount(0, Router::getRoutes());
     }
+
+    public function testFluentConfiguration(): void
+    {
+        // Reset to ensure clean state
+        Router::resetInstance();
+        
+        // Test that configure() without parameters returns a RouterConfigurationBuilder
+        $builder = Router::configure();
+        $this->assertInstanceOf(\ElliePHP\Components\Routing\Core\RouterConfigurationBuilder::class, $builder);
+    }
+
+    public function testFluentConfigurationChaining(): void
+    {
+        // Reset to ensure clean state
+        Router::resetInstance();
+        
+        // Test that fluent methods return the same builder instance for chaining
+        $builder = Router::configure();
+        $result = $builder->debugMode(true);
+        $this->assertSame($builder, $result);
+        
+        $result2 = $builder->enableCache();
+        $this->assertSame($builder, $result2);
+    }
+
+    public function testArrayConfigurationStillWorks(): void
+    {
+        // Reset to ensure clean state
+        Router::resetInstance();
+        
+        // Test that existing array-based configuration still works
+        Router::configure(['debug_mode' => true]);
+        
+        // Should be able to create routes after array configuration
+        Router::get('/test', function () {
+            return ['configured' => true];
+        });
+
+        $request = new ServerRequest('GET', '/test');
+        $response = Router::handle($request);
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testConfigurationAfterInitializationThrowsException(): void
+    {
+        // Reset to ensure clean state, then initialize router
+        Router::resetInstance();
+        Router::getInstance();
+        
+        $this->expectException(\ElliePHP\Components\Routing\Exceptions\RouterException::class);
+        $this->expectExceptionMessage("Cannot configure router after it has been initialized");
+        
+        Router::configure(['debug_mode' => true]);
+    }
+
+    public function testFluentConfigurationAfterInitializationThrowsException(): void
+    {
+        // Reset to ensure clean state, then initialize router
+        Router::resetInstance();
+        Router::getInstance();
+        
+        $this->expectException(\ElliePHP\Components\Routing\Exceptions\RouterException::class);
+        $this->expectExceptionMessage("Cannot configure router after it has been initialized");
+        
+        Router::configure();
+    }
+
+    public function testFluentConfigurationIntegration(): void
+    {
+        // Reset to ensure clean state
+        Router::resetInstance();
+        
+        // Configure router using fluent API
+        Router::configure()
+            ->debugMode(true)
+            ->disableCache()
+            ->routesDirectory('/')
+            ->build();
+        
+        // Should be able to create routes after fluent configuration
+        Router::get('/fluent-test', function () {
+            return ['fluent' => true];
+        });
+
+        $request = new ServerRequest('GET', '/fluent-test');
+        $response = Router::handle($request);
+        
+        $this->assertEquals(200, $response->getStatusCode());
+        $body = json_decode((string)$response->getBody(), true);
+        $this->assertTrue($body['fluent']);
+    }
 }
