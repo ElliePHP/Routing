@@ -81,7 +81,7 @@ final class Router
      * @return RouterConfigurationBuilder|void Returns builder for fluent configuration when no parameters provided
      * @throws RouterException
      */
-    public static function configure(?array $config = null)
+    public static function configure(?array $config = null): ?RouterConfigurationBuilder
     {
         if (self::$instance !== null) {
             throw new RouterException("Cannot configure router after it has been initialized");

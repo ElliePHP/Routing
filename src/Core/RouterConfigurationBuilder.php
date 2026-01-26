@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ElliePHP\Components\Routing\Core;
 
 use ElliePHP\Components\Routing\Exceptions\RouterException;
+use ElliePHP\Components\Routing\Router;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -194,29 +195,29 @@ class RouterConfigurationBuilder
         // We don't need to check here as the Router facade will handle initialization timing
 
         // Get merged configuration for validation
-        $routerClass = \ElliePHP\Components\Routing\Router::class;
+        $routerClass = Router::class;
         $existingConfig = $routerClass::getConfig();
         $mergedConfig = $this->mergeConfigurations($existingConfig, $this->config);
         $finalConfig = $this->applyConfigurationRules($mergedConfig);
 
         // Validate routes directory if specified and not default
-        if (isset($finalConfig['routes_directory']) && $finalConfig['routes_directory'] !== '/' && !empty($finalConfig['routes_directory'])) {
+        if ($finalConfig['routes_directory'] !== '/' && !empty($finalConfig['routes_directory'])) {
             $this->validateRoutesDirectory($finalConfig['routes_directory']);
         }
 
         // Validate cache directory if specified
-        if (isset($finalConfig['cache_directory']) && $finalConfig['cache_directory'] !== null) {
+        if (isset($finalConfig['cache_directory'])) {
             $this->validateCacheDirectory($finalConfig['cache_directory']);
         }
 
         // Validate error formatter interface
-        if (isset($finalConfig['error_formatter']) && $finalConfig['error_formatter'] !== null && 
+        if (isset($finalConfig['error_formatter']) &&
             !($finalConfig['error_formatter'] instanceof ErrorFormatterInterface)) {
             throw new RouterException('Error formatter must implement ErrorFormatterInterface');
         }
 
         // Validate container interface
-        if (isset($finalConfig['container']) && $finalConfig['container'] !== null && 
+        if (isset($finalConfig['container']) &&
             !($finalConfig['container'] instanceof ContainerInterface)) {
             throw new RouterException('Container must implement PSR-11 ContainerInterface');
         }
@@ -321,7 +322,7 @@ class RouterConfigurationBuilder
     private function applyConfiguration(): void
     {
         // Import the Router class to access its configure method
-        $routerClass = \ElliePHP\Components\Routing\Router::class;
+        $routerClass = Router::class;
         
         // Get existing configuration from Router to merge with fluent configuration
         $existingConfig = $routerClass::getConfig();

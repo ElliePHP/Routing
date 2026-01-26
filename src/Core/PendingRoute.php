@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace ElliePHP\Components\Routing\Core;
 
+use ElliePHP\Components\Routing\Exceptions\RouterException;
+use Throwable;
+
 /**
  * PendingRoute - Builder for fluent route configuration
  * 
@@ -106,10 +109,8 @@ class PendingRoute
                 $this->options['name'] ?? null,
                 $this->options['domain'] ?? null
             );
-        } catch (\Throwable $e) {
-            // Log error but don't throw from destructor
-            // Throwing from destructors can cause fatal errors
-            error_log("Failed to register route: " . $e->getMessage());
+        } catch (Throwable $e) {
+            Throw new RouterException('Failed to register routes: '. $e->getMessage());
         }
     }
 }
