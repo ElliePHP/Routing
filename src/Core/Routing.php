@@ -227,7 +227,8 @@ class Routing
                 $timing = $this->debugger->getTimingInfo($this->requestStartTime);
                 $response = $response
                     ->withHeader('X-Debug-Time', $timing['duration_ms'] . 'ms')
-                    ->withHeader('X-FRV', 'ElliePHP Router')
+                    ->withHeader('X-Router', 'ElliePHP Router')
+                    ->withHeader('X-Router-Version', '1.0.20')
                     ->withHeader('X-Debug-Routes', (string)count($this->routes));
             }
 
