@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ElliePHP\Components\Routing\Core;
 
 use ElliePHP\Components\Routing\Exceptions\RouterException;
+use ElliePHP\Components\Support\Util\Json;
+use FilesystemIterator;
 use JsonException;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -15,29 +17,44 @@ use Throwable;
  */
 class RouteCache
 {
-    private string $cacheFile;
+    private const int CACHE_FRESHNESS_THRESHOLD = 5; // seconds
+    private const int CACHE_FILE_PERMISSIONS = 0600;
+
+    public string $cacheFile {
+        get {
+            return $this->cacheFile;
+        }
+    }
     private string $cacheDirectory;
+    private ?array $cachedData = null;
 
     public function __construct(string $cacheDirectory = '/tmp')
     {
         $this->cacheDirectory = rtrim($cacheDirectory, '/');
-        
-        // Use unique cache filename to prevent predictable attacks
+        $this->validateCacheDirectory();
+
         $uniqueId = md5(__DIR__);
-        $this->cacheFile = $this->cacheDirectory . '/ellie_routes_' . $uniqueId . '.cache';
-        
-        // Ensure cache directory exists and is writable
+        $this->cacheFile = "$this->cacheDirectory/ellie_routes_$uniqueId.cache";
+    }
+
+    /**
+     * Validate cache directory exists and is writable
+     *
+     * @throws RouterException
+     */
+    private function validateCacheDirectory(): void
+    {
         if (!is_dir($this->cacheDirectory)) {
-            throw new RouterException("Cache directory does not exist: {$this->cacheDirectory}");
+            throw new RouterException("Cache directory does not exist: $this->cacheDirectory");
         }
-        
+
         if (!is_writable($this->cacheDirectory)) {
-            throw new RouterException("Cache directory is not writable: {$this->cacheDirectory}");
+            throw new RouterException("Cache directory is not writable: $this->cacheDirectory");
         }
     }
 
     /**
-     * Check if cached routes exist and are valid
+     * Check if cached routes exist
      */
     public function exists(): bool
     {
@@ -46,7 +63,7 @@ class RouteCache
 
     /**
      * Check if cache is valid based on version and file modification times
-     * 
+     *
      * @param string $routesDirectory Directory containing route files
      * @param int|null $cacheVersion Optional cache version number
      * @return bool True if cache is valid, false if it should be invalidated
@@ -57,57 +74,86 @@ class RouteCache
             return false;
         }
 
-        // Load cache metadata (only once, cache the result)
-        static $cacheData = null;
+        $cacheData = $this->loadCacheData();
         if ($cacheData === null) {
-            $content = file_get_contents($this->cacheFile);
-            if ($content === false) {
-                return false;
-            }
-
-            $cacheData = json_decode($content, true);
-            if (!is_array($cacheData)) {
-                return false;
-            }
-        }
-
-        $data = $cacheData;
-
-        // Backward compatibility: if cache is old format (just routes array), it's invalid
-        if (!isset($data['routes'])) {
             return false;
         }
 
-        // Check cache version if provided
-        if ($cacheVersion !== null && (!isset($data['version']) || $data['version'] !== $cacheVersion)) {
+        // Validate cache structure
+        if (!isset($cacheData['routes'])) {
             return false;
         }
 
-        // Check if route files have been modified (only if routes directory exists and is valid)
-        // Only check mtime if we have it cached, otherwise skip the check for performance
-        if (isset($data['route_files_mtime']) && is_dir($routesDirectory) && $routesDirectory !== '/') {
-            // Only check mtime if cache was created recently (within last 5 seconds)
-            // This avoids expensive directory scanning on every request
-            $cacheAge = time() - ($data['cached_at'] ?? 0);
-            if ($cacheAge < 5) {
-                // Cache is very fresh, trust it
-                return true;
-            }
-            
-            try {
-                $cachedMtime = $data['route_files_mtime'];
-                $currentMtime = $this->getRoutesDirectoryMtime($routesDirectory);
-                
-                if ($currentMtime !== $cachedMtime) {
-                    return false;
-                }
-            } catch (Throwable) {
-                // If we can't check mtime, invalidate cache to be safe
-                return false;
-            }
+        // Validate version if provided
+        if ($cacheVersion !== null && $this->isCacheVersionMismatch($cacheData, $cacheVersion)) {
+            return false;
         }
 
-        return true;
+        // Validate route files haven't changed
+        return $this->areRouteFilesUnchanged($cacheData, $routesDirectory);
+    }
+
+    /**
+     * Load and cache the cache data structure
+     */
+    private function loadCacheData(): ?array
+    {
+        if ($this->cachedData !== null) {
+            return $this->cachedData;
+        }
+
+        $content = @file_get_contents($this->cacheFile);
+        if ($content === false) {
+            return null;
+        }
+
+        $data = Json::decode($content);
+        if (!is_array($data)) {
+            return null;
+        }
+
+        $this->cachedData = $data;
+        return $data;
+    }
+
+    /**
+     * Check if cache version matches expected version
+     */
+    private function isCacheVersionMismatch(array $cacheData, int $expectedVersion): bool
+    {
+        return !isset($cacheData['version']) || $cacheData['version'] !== $expectedVersion;
+    }
+
+    /**
+     * Check if route files have been modified since cache creation
+     */
+    private function areRouteFilesUnchanged(array $cacheData, string $routesDirectory): bool
+    {
+        // Skip mtime check if not tracked in cache
+        if (!isset($cacheData['route_files_mtime'])) {
+            return true;
+        }
+
+        // Validate routes directory
+        if ($routesDirectory === '/' || !is_dir($routesDirectory)) {
+            return true;
+        }
+
+        // Trust very fresh cache (within threshold)
+        $cacheAge = time() - ($cacheData['cached_at'] ?? 0);
+        if ($cacheAge < self::CACHE_FRESHNESS_THRESHOLD) {
+            return true;
+        }
+
+        try {
+            $cachedMtime = $cacheData['route_files_mtime'];
+            $currentMtime = $this->getRoutesDirectoryMtime($routesDirectory);
+
+            return $currentMtime === $cachedMtime;
+        } catch (Throwable) {
+            // Invalidate cache if we can't verify mtime
+            return false;
+        }
     }
 
     /**
@@ -121,15 +167,13 @@ class RouteCache
 
         $maxMtime = 0;
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($routesDirectory)
+            new RecursiveDirectoryIterator($routesDirectory, FilesystemIterator::SKIP_DOTS)
         );
 
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $mtime = $file->getMTime();
-                if ($mtime > $maxMtime) {
-                    $maxMtime = $mtime;
-                }
+                $maxMtime = max($maxMtime, $mtime);
             }
         }
 
@@ -138,6 +182,9 @@ class RouteCache
 
     /**
      * Load routes from cache
+     *
+     * @return array
+     * @throws RouterException
      */
     public function load(): array
     {
@@ -150,18 +197,22 @@ class RouteCache
             throw new RouterException("Failed to read route cache file");
         }
 
-        $data = json_decode($content, true);
+        $data = Json::decode($content);
         if (!is_array($data)) {
             throw new RouterException("Invalid route cache format");
         }
 
-        // Return routes array (backward compatible) or full data structure
+        // Return routes array with backward compatibility
         return $data['routes'] ?? $data;
     }
 
     /**
      * Save routes to cache with versioning and file modification tracking
-     * @throws JsonException
+     *
+     * @param array $routes Routes to cache
+     * @param string|null $routesDirectory Optional routes directory for mtime tracking
+     * @param int|null $version Optional cache version
+     * @throws RouterException
      */
     public function save(array $routes, ?string $routesDirectory = null, ?int $version = null): void
     {
@@ -170,26 +221,29 @@ class RouteCache
             'cached_at' => time(),
         ];
 
-        // Add version if provided
         if ($version !== null) {
             $data['version'] = $version;
         }
 
-        // Add route files modification time if directory provided
         if ($routesDirectory !== null && is_dir($routesDirectory)) {
             $data['route_files_mtime'] = $this->getRoutesDirectoryMtime($routesDirectory);
         }
 
-        $content = json_encode($data, JSON_THROW_ON_ERROR);
-        
+        try {
+            $content = json_encode($data, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new RouterException("Failed to encode routes to JSON: {$e->getMessage()}", 0, $e);
+        }
+
         $result = file_put_contents($this->cacheFile, $content, LOCK_EX);
-        
         if ($result === false) {
             throw new RouterException("Failed to write route cache file");
         }
-        
-        // Set restrictive permissions on cache file
-        chmod($this->cacheFile, 0600);
+
+        @chmod($this->cacheFile, self::CACHE_FILE_PERMISSIONS);
+
+        // Clear in-memory cache
+        $this->cachedData = null;
     }
 
     /**
@@ -198,15 +252,9 @@ class RouteCache
     public function clear(): void
     {
         if ($this->exists()) {
-            unlink($this->cacheFile);
+            @unlink($this->cacheFile);
+            $this->cachedData = null;
         }
     }
 
-    /**
-     * Get cache file path
-     */
-    public function getCacheFile(): string
-    {
-        return $this->cacheFile;
-    }
 }

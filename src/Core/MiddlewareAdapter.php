@@ -42,11 +42,7 @@ readonly class MiddlewareAdapter
 
         if (is_string($middleware) && class_exists($middleware)) {
             // Try to resolve from container first
-            if ($this->container !== null && $this->container->has($middleware)) {
-                $instance = $this->container->get($middleware);
-            } else {
-                $instance = new $middleware();
-            }
+            $instance = $this->container !== null && $this->container->has($middleware) ? $this->container->get($middleware) : new $middleware();
             
             if ($instance instanceof MiddlewareInterface) {
                 return $instance;
