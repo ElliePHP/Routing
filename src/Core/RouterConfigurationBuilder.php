@@ -212,38 +212,37 @@ class RouterConfigurationBuilder
         $routerClass = Router::class;
         $existingConfig = $routerClass::getConfig();
         $mergedConfig = $this->mergeConfigurations($existingConfig, $this->config);
-        $finalConfig = $this->applyConfigurationRules($mergedConfig);
 
         // Validate routes directory
-        if ($finalConfig['routes_directory'] !== '/' && !empty($finalConfig['routes_directory'])) {
-            $this->validateRoutesDirectory($finalConfig['routes_directory']);
+        if ($mergedConfig['routes_directory'] !== '/' && !empty($mergedConfig['routes_directory'])) {
+            $this->validateRoutesDirectory($mergedConfig['routes_directory']);
         }
 
         // Validate cache directory
-        if (isset($finalConfig['cache_directory'])) {
-            $this->validateCacheDirectory($finalConfig['cache_directory']);
+        if (isset($mergedConfig['cache_directory'])) {
+            $this->validateCacheDirectory($mergedConfig['cache_directory']);
         }
 
         // Validate error formatter
-        if (isset($finalConfig['error_formatter']) &&
-            !($finalConfig['error_formatter'] instanceof ErrorFormatterInterface)) {
+        if (isset($mergedConfig['error_formatter']) &&
+            !($mergedConfig['error_formatter'] instanceof ErrorFormatterInterface)) {
             throw new RouterException('Error formatter must implement ErrorFormatterInterface');
         }
 
         // Validate container
-        if (isset($finalConfig['container']) &&
-            !($finalConfig['container'] instanceof ContainerInterface)) {
+        if (isset($mergedConfig['container']) &&
+            !($mergedConfig['container'] instanceof ContainerInterface)) {
             throw new RouterException('Container must implement PSR-11 ContainerInterface');
         }
 
         // Validate middleware
-        $this->validateMiddleware($finalConfig);
+        $this->validateMiddleware($mergedConfig);
 
         // Validate domains
-        $this->validateDomains($finalConfig);
+        $this->validateDomains($mergedConfig);
 
         // Validate boolean options
-        $this->validateBooleanOptions($finalConfig);
+        $this->validateBooleanOptions($mergedConfig);
     }
 
     /**
@@ -374,9 +373,9 @@ class RouterConfigurationBuilder
         $routerClass = Router::class;
         $existingConfig = $routerClass::getConfig();
         $mergedConfig = $this->mergeConfigurations($existingConfig, $this->config);
-        $finalConfig = $this->applyConfigurationRules($mergedConfig);
 
-        $routerClass::configure($finalConfig);
+        // Router::configure will apply configuration rules
+        $routerClass::configure($mergedConfig);
     }
 
     /**
@@ -404,31 +403,5 @@ class RouterConfigurationBuilder
         }
 
         return $merged;
-    }
-
-    /**
-     * Apply configuration rules and interactions
-     *
-     * @param array $config Configuration to process
-     * @return array Configuration with rules applied
-     */
-    private function applyConfigurationRules(array $config): array
-    {
-        // Rule: Cache is disabled when debug mode is enabled
-        if (isset($config['debug_mode']) && $config['debug_mode'] === true) {
-            $config['cache_enabled'] = false;
-
-            // Emit warning if debug mode is enabled in production
-            $appEnv = $_ENV['APP_ENV'] ?? getenv('APP_ENV');
-            if ($appEnv === 'production') {
-                trigger_error(
-                    'WARNING: Debug mode is enabled in production environment. ' .
-                    'This exposes sensitive information.',
-                    E_USER_WARNING
-                );
-            }
-        }
-
-        return $config;
     }
 }

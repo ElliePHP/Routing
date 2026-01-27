@@ -13,11 +13,11 @@ use Psr\Http\Message\ServerRequestInterface;
 
 /**
  * Router Facade
- * 
+ *
  * Provides a static interface to the routing system.
- * 
+ *
  * @mixin EllieRouter
- * 
+ *
  * @method static PendingRoute|null get(string $url, Closure|callable|string|array $handler, array $options = []) Register a GET route
  * @method static PendingRoute|null post(string $url, Closure|callable|string|array $handler, array $options = []) Register a POST route
  * @method static PendingRoute|null put(string $url, Closure|callable|string|array $handler, array $options = []) Register a PUT route
@@ -63,10 +63,10 @@ final class Router
 
     /**
      * Configure the router before first use
-     * 
+     *
      * When called with an array, configures the router using the traditional array-based approach.
      * When called without parameters, returns a RouterConfigurationBuilder for fluent configuration.
-     * 
+     *
      * @param array|null $config Configuration options (optional):
      *   - routes_directory: Directory containing route files
      *   - debug_mode: Enable debug mode with detailed errors and timing
@@ -77,8 +77,8 @@ final class Router
      *   - allowed_domains: Array of allowed domains (supports patterns like {tenant}.example.com)
      *   - global_middleware: Array of middleware classes to apply to all routes
      *   - container: PSR-11 container for dependency injection
-     * 
-     * @return RouterConfigurationBuilder|void Returns builder for fluent configuration when no parameters provided
+     *
+     * @return RouterConfigurationBuilder|null Returns builder for fluent configuration when no parameters provided, null otherwise
      * @throws RouterException
      */
     public static function configure(?array $config = null): ?RouterConfigurationBuilder
@@ -86,24 +86,27 @@ final class Router
         if (self::$instance !== null) {
             throw new RouterException("Cannot configure router after it has been initialized");
         }
-        
+
         // If no config provided, return fluent configuration builder
         if ($config === null) {
             return new RouterConfigurationBuilder();
         }
-        
+
         // Traditional array-based configuration
-        // Security: Warn if debug mode is enabled
+        // Security: Warn if debug mode is enabled in production
         if (isset($config['debug_mode']) && $config['debug_mode'] === true) {
-            if ((isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') || getenv('APP_ENV') === 'production') {
+            $appEnv = $_ENV['APP_ENV'] ?? getenv('APP_ENV');
+            if ($appEnv === 'production') {
                 trigger_error(
                     'WARNING: Debug mode is enabled in production environment. This exposes sensitive information.',
                     E_USER_WARNING
                 );
             }
         }
-        
+
         self::$config = array_merge(self::$config, $config);
+
+        return null;
     }
 
     /**
@@ -130,7 +133,7 @@ final class Router
 
     /**
      * Get current router configuration
-     * 
+     *
      * @return array Current configuration array
      */
     public static function getConfig(): array
@@ -163,7 +166,7 @@ final class Router
      * This magic method is the core of the facade. Any static call to this
      * class (e.g., Router::get(...)) will be passed to the RouterLibrary instance.
      *
-     * @param string $method The name of the method being callednks..
+     * @param string $method The name of the method being called
      * @param array $parameters The parameters passed to the method.
      * @return mixed
      * @throws RouterException
