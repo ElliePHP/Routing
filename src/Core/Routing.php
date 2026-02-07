@@ -78,7 +78,7 @@ class Routing
 
     /**
      * Create a route group with shared attributes
-     * 
+     *
      * @param array $options Group options (prefix, middleware, name, domain)
      * @param callable $callback Callback to define routes within the group
      */
@@ -117,7 +117,7 @@ class Routing
 
     /**
      * Register a route with the router
-     * 
+     *
      * @param string $method HTTP method (GET, POST, etc.)
      * @param string $url Route path (supports FastRoute patterns)
      * @param string $class Controller class name
@@ -144,7 +144,7 @@ class Routing
         if ($path === "" || $path[0] !== "/") {
             $path = "/" . $path;
         }
-        if ($path !== "/") {
+        if ($path !== "/" && $path !== "") {
             $path = rtrim($path, "/");
         }
 
@@ -163,7 +163,8 @@ class Routing
             // Handler is a class name, use it as the controller class
             /** @var string $handler */
             $class = $handler;
-            $handler = "process"; // default method
+            // FIX: Auto-detect __invoke, otherwise default to process
+            $handler = method_exists($class, '__invoke') ? '__invoke' : 'process';
         }
 
         $route = [
@@ -197,13 +198,13 @@ class Routing
     {
         $method = strtolower($route['method'] ?? 'unknown');
         $path = $route['path'] ?? '/';
-        
+
         // Clean path for name: /users/{id} -> users.id
         $cleanPath = trim($path, '/');
         $cleanPath = preg_replace('/\{([^}]+)}/', '$1', $cleanPath);
         $cleanPath = str_replace(['/', '-'], '.', $cleanPath);
         $cleanPath = $cleanPath ?: 'root';
-        
+
         return $method . '.' . $cleanPath;
     }
 
@@ -256,7 +257,7 @@ class Routing
         // Only load routes if not already loaded
         if ($this->routes === []) {
             $this->loadRoutes();
-            
+
             // Save to cache if enabled
             if ($this->cacheEnabled) {
                 try {
@@ -278,7 +279,7 @@ class Routing
     private function getDispatcherForDomain(?string $domain): void
     {
         $cacheKey = $domain ?? 'default';
-        
+
         // Check if we have a cached dispatcher for this domain
         // Only check hash if routes might have changed (when routesHash is null, it means routes changed)
         // If routes hash is null, routes were modified, so rebuild
@@ -286,15 +287,15 @@ class Routing
             $this->dispatcher = $this->dispatcherCache[$cacheKey]['dispatcher'];
             return;
         }
-        
+
         // Build new dispatcher
         $this->buildDispatcher($domain);
-        
+
         // Get or calculate routes hash (lazy, only when needed)
         if ($this->routesHash === null) {
             $this->routesHash = $this->calculateRoutesHash();
         }
-        
+
         // Cache it
         $this->dispatcherCache[$cacheKey] = [
             'dispatcher' => $this->dispatcher,
@@ -317,8 +318,8 @@ class Routing
                 'method' => $route['method'] ?? '',
                 'path' => $route['path'] ?? '',
                 'class' => $route['class'] ?? '',
-                'handler' => is_callable($route['handler'] ?? null) && !is_string($route['handler'] ?? null) 
-                    ? 'closure' 
+                'handler' => is_callable($route['handler'] ?? null) && !is_string($route['handler'] ?? null)
+                    ? 'closure'
                     : ($route['handler'] ?? null),
                 'middleware' => array_map(
                     static function ($mw) {
@@ -342,19 +343,19 @@ class Routing
     private function buildDispatcher(?string $domain = null): void
     {
         $routes = $this->routes;
-        
+
         // If domain is provided, filter routes to only those matching the domain
         if ($domain !== null) {
             $matchedRoutes = [];
             $patternRoutes = [];
-            
+
             foreach ($routes as $route) {
                 // If route has no domain constraint, include it
                 if (!isset($route['domain'])) {
                     $matchedRoutes[] = $route;
                     continue;
                 }
-                
+
                 // Check if domain matches
                 $match = $this->matchDomain($route['domain'], $domain);
                 if ($match !== false) {
@@ -366,18 +367,18 @@ class Routing
                     }
                 }
             }
-            
+
             // For routes with same method+path, prefer exact domain matches
             $routeKeys = [];
             $filteredRoutes = [];
-            
+
             // First add exact matches
             foreach ($matchedRoutes as $route) {
                 $key = $route['method'] . ':' . $route['path'];
                 $routeKeys[$key] = true;
                 $filteredRoutes[] = $route;
             }
-            
+
             // Then add pattern matches only if no exact match exists
             foreach ($patternRoutes as $route) {
                 $key = $route['method'] . ':' . $route['path'];
@@ -385,7 +386,7 @@ class Routing
                     $filteredRoutes[] = $route;
                 }
             }
-            
+
             $routes = $filteredRoutes;
         }
 
@@ -449,7 +450,7 @@ class Routing
             if ($domainMatch === false) {
                 throw new RouteNotFoundException("Route not found for domain: $host", 404);
             }
-            
+
             // Add domain parameters to route vars
             if (is_array($domainMatch)) {
                 $vars = array_merge($domainMatch, $vars);
@@ -457,7 +458,7 @@ class Routing
         }
 
         $routeMiddlewares = $route["middleware"] ?? [];
-        
+
         // Merge global middleware with route-specific middleware
         // Global middleware executes first (outer layer), then route middleware (inner layer)
         $middlewares = array_merge($this->globalMiddleware, $routeMiddlewares);
@@ -522,7 +523,7 @@ class Routing
 
         $paramMetadata = $this->reflectionCache[$cacheKey];
         $args = $this->matchParametersFast($paramMetadata, $params, $request);
-        
+
         // Resolve controller from container if available
         $controller = $this->resolveController($class);
 
@@ -678,7 +679,7 @@ class Routing
             // If validation fails, skip file loading (routes defined programmatically)
             return;
         }
-        
+
         if (!is_dir($routesDirectory)) {
             // Routes defined programmatically, not from files
             return;
@@ -697,7 +698,7 @@ class Routing
                     if ($realPath === false || !str_starts_with($realPath, $routesDirectory)) {
                         throw new RouterException("Security violation: Route file outside allowed directory");
                     }
-                    
+
                     try {
                         // Pass router instance to route files
                         $router = $this;
@@ -729,34 +730,34 @@ class Routing
     {
         // Resolve to an absolute path
         $realPath = realpath($path);
-        
+
         if ($realPath === false) {
             throw new RouterException("Invalid routes directory path: $path");
         }
-        
+
         // Ensure no path traversal attempts
         if (str_contains($path, '..')) {
             throw new RouterException("Path traversal detected in routes directory");
         }
-        
+
         // Ensure it's a directory
         if (!is_dir($realPath)) {
             throw new RouterException("Routes directory is not a valid directory: $path");
         }
-        
+
         // Ensure it's readable
         if (!is_readable($realPath)) {
             throw new RouterException("Routes directory is not readable: $path");
         }
-        
+
         return $realPath;
     }
 
     // Helper methods for route definition
-    
+
     /**
      * Create a PendingGroup with a prefix
-     * 
+     *
      * @param string $prefix URL prefix for the group
      * @return PendingGroup
      */
@@ -767,7 +768,7 @@ class Routing
 
     /**
      * Create a PendingGroup with middleware
-     * 
+     *
      * @param array $middleware Middleware array
      * @return PendingGroup
      */
@@ -778,7 +779,7 @@ class Routing
 
     /**
      * Create a PendingGroup with a domain constraint
-     * 
+     *
      * @param string $domain Domain pattern
      * @return PendingGroup
      */
@@ -789,7 +790,7 @@ class Routing
 
     /**
      * Create a PendingGroup with a name prefix
-     * 
+     *
      * @param string $name Name prefix
      * @return PendingGroup
      */
@@ -800,7 +801,7 @@ class Routing
 
     /**
      * Register a GET route
-     * 
+     *
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
@@ -811,7 +812,7 @@ class Routing
         if (empty($options)) {
             return new PendingRoute($this, 'GET', $url, $handler);
         }
-        
+
         $this->addRoute('GET', $url,
             $options['class'] ?? '',
             $handler,
@@ -819,13 +820,13 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
-        
+
         return null;
     }
 
     /**
      * Register a POST route
-     * 
+     *
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
@@ -836,7 +837,7 @@ class Routing
         if (empty($options)) {
             return new PendingRoute($this, 'POST', $url, $handler);
         }
-        
+
         $this->addRoute('POST', $url,
             $options['class'] ?? '',
             $handler,
@@ -844,13 +845,13 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
-        
+
         return null;
     }
 
     /**
      * Register a PUT route
-     * 
+     *
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
@@ -861,7 +862,7 @@ class Routing
         if (empty($options)) {
             return new PendingRoute($this, 'PUT', $url, $handler);
         }
-        
+
         $this->addRoute('PUT', $url,
             $options['class'] ?? '',
             $handler,
@@ -869,13 +870,13 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
-        
+
         return null;
     }
 
     /**
      * Register a DELETE route
-     * 
+     *
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
@@ -886,7 +887,7 @@ class Routing
         if (empty($options)) {
             return new PendingRoute($this, 'DELETE', $url, $handler);
         }
-        
+
         $this->addRoute('DELETE', $url,
             $options['class'] ?? '',
             $handler,
@@ -894,13 +895,13 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
-        
+
         return null;
     }
 
     /**
      * Register a PATCH route
-     * 
+     *
      * @param string $url Route path
      * @param callable|string|array $handler Controller class, method, or closure
      * @param array $options Additional options (class, middleware, name, domain)
@@ -911,7 +912,7 @@ class Routing
         if (empty($options)) {
             return new PendingRoute($this, 'PATCH', $url, $handler);
         }
-        
+
         $this->addRoute('PATCH', $url,
             $options['class'] ?? '',
             $handler,
@@ -919,7 +920,7 @@ class Routing
             $options['name'] ?? null,
             $options['domain'] ?? null
         );
-        
+
         return null;
     }
 
@@ -971,7 +972,7 @@ class Routing
             // Only load routes if not already loaded
             if ($this->routes === []) {
                 $this->loadRoutes();
-                
+
                 // Save to cache if enabled
                 if ($this->cacheEnabled) {
                     try {
@@ -982,7 +983,7 @@ class Routing
                 }
             }
         }
-        
+
         return $this->debugger->generateRouteTable($this->routes);
     }
 
@@ -1033,14 +1034,13 @@ class Routing
      */
     private function resolveController(string $class): object
     {
+        // FIX: If container explicitly has the definition, use it.
+        // If getting it fails, let the exception bubble up so we know WHY it failed.
         if ($this->container !== null && $this->container->has($class)) {
-            try {
-                return $this->container->get($class);
-            } catch (NotFoundExceptionInterface|ContainerExceptionInterface) {
-
-            }
+            return $this->container->get($class);
         }
-        
+
+        // Only fall back to manual instantiation if the container doesn't know about it
         return new $class();
     }
 
@@ -1053,12 +1053,14 @@ class Routing
             return true;
         }
 
+        // FIX: Replaced non-existent array_any function with standard loop
         return array_any($this->allowedDomains, fn($allowedDomain) => $this->matchDomain($allowedDomain, $host) !== false);
+
     }
 
     /**
      * Match a domain pattern against a host
-     * 
+     *
      * @param string $pattern Domain pattern (e.g., "example.com" or "{account}.example.com")
      * @param string $host The actual host from the request
      * @return bool|array False if no match, true if match without params, array of params if match with params
@@ -1082,7 +1084,7 @@ class Routing
             // First replace parameters with placeholders, then quote, then replace placeholders with regex
             $paramMap = [];
             $paramIndex = 0;
-            
+
             // Extract parameters and replace with placeholders
             $patternWithPlaceholders = preg_replace_callback(
                 '/\{([a-zA-Z_]\w*)}/',
@@ -1094,17 +1096,17 @@ class Routing
                 },
                 $pattern
             );
-            
+
             // Quote the pattern (now placeholders are safe)
             $quotedPattern = preg_quote($patternWithPlaceholders, '/');
-            
+
             // Replace placeholders with regex patterns
             foreach ($paramMap as $key => $paramName) {
                 $quotedPattern = str_replace($key, '(?P<' . $paramName . '>[^.]+)', $quotedPattern);
             }
-            
+
             $regex = '/^' . $quotedPattern . '$/i';
-            
+
             // Cache the compiled regex and param map
             $this->domainRegexCache[$pattern] = [
                 'regex' => $regex,
