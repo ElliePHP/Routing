@@ -560,11 +560,10 @@ class Routing
      * Fast parameter matching using cached metadata (much faster than reflection on every request)
      */
     private function matchParametersFast(
-        array                  $parameterMetadata,
-        array                  $params,
+        array $parameterMetadata,
+        array $params,
         ServerRequestInterface $request,
-    ): array
-    {
+    ): array {
         $args = [];
 
         foreach ($parameterMetadata as $param) {
@@ -572,15 +571,47 @@ class Routing
             $type = $param['type'];
             $isBuiltin = $param['isBuiltin'];
 
-            // Check if it's a ServerRequestInterface type
-            if ($type !== null && !$isBuiltin && is_a($type, ServerRequestInterface::class, true)) {
+            if ($type !== null && !$isBuiltin && is_a($type, ServerRequestInterface::class, true) && $request instanceof $type) {
+                // Inject the request automatically
                 $args[] = $request;
             } elseif (array_key_exists($name, $params)) {
-                $args[] = $params[$name];
+                // Inject from route parameters with type coercion
+                $value = $params[$name];
+
+                // Type coercion for scalar types
+                if ($isBuiltin && $type !== null) {
+                    $value = match($type) {
+                        'int' => (int)$value,
+                        'float' => (float)$value,
+                        'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+                        'string' => (string)$value,
+                        default => $value,
+                    };
+                }
+
+                $args[] = $value;
+            } elseif ($type !== null && !$isBuiltin && $this->container !== null && $this->container->has($type)) {
+                // Inject from container if class type exists
+                try {
+                    $args[] = $this->container->get($type);
+                } catch (NotFoundExceptionInterface|ContainerExceptionInterface $e) {
+                    throw new RouterException(
+                        "Failed to resolve dependency '$name' of type '$type': " . $e->getMessage(),
+                        500,
+                        $e
+                    );
+                }
             } elseif ($param['isOptional']) {
+                // Use default value if optional
                 $args[] = $param['defaultValue'];
             } else {
-                throw new RouterException("Missing required parameter: $name", 400);
+                // Fail if nothing matches - provide helpful context
+                $availableParams = !empty($params) ? implode(', ', array_keys($params)) : 'none';
+                $context = $type ? " (expected type: $type)" : "";
+                throw new RouterException(
+                    "Missing required parameter '$name'$context. Available route params: $availableParams",
+                    400
+                );
             }
         }
 
@@ -696,7 +727,7 @@ class Routing
      */
     private function validateRoutesDirectory(string $path): string
     {
-        // Resolve to absolute path
+        // Resolve to an absolute path
         $realPath = realpath($path);
         
         if ($realPath === false) {
