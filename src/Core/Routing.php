@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ElliePHP\Components\Routing\Core;
 
+use Closure;
 use ElliePHP\Components\Routing\Exceptions\ClassNotFoundException;
 use ElliePHP\Components\Routing\Exceptions\MiddlewareNotFoundException;
 use ElliePHP\Components\Routing\Exceptions\RouteNotFoundException;
@@ -23,6 +24,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionFunction;
 use ReflectionNamedType;
 use Throwable;
 use function FastRoute\simpleDispatcher;
@@ -163,7 +165,7 @@ class Routing
             // Handler is a class name, use it as the controller class
             /** @var string $handler */
             $class = $handler;
-            // FIX: Auto-detect __invoke, otherwise default to process
+            // Auto-detect __invoke, otherwise default to process
             $handler = method_exists($class, '__invoke') ? '__invoke' : 'process';
         }
 
@@ -444,7 +446,7 @@ class Routing
         string                 $host
     ): ResponseInterface
     {
-        // Check if route has domain constraint
+        // Check if the route has a domain constraint
         if (isset($route["domain"])) {
             $domainMatch = $this->matchDomain($route["domain"], $host);
             if ($domainMatch === false) {
@@ -497,52 +499,86 @@ class Routing
         array                  $params
     ): ResponseInterface
     {
-        [$class, $method] = [$route["class"], $route["handler"]];
+        [$class, $handler] = [$route["class"], $route["handler"]];
 
-        // Handle closure routes
-        if ($class === "" && is_callable($method)) {
-            $result = $method($request, $params);
-            return $result instanceof ResponseInterface
-                ? $result
-                : $this->createResponse($result);
-        }
-
-        // Handle controller routes
-        if (!class_exists($class)) {
-            throw new ClassNotFoundException("Class not found: $class");
-        }
-        if (!method_exists($class, $method)) {
-            throw new ClassNotFoundException("Method not found: $method in $class");
-        }
-
-        // Cache reflection metadata for performance (major speedup!)
-        $cacheKey = $class . '::' . $method;
+        // Get cached parameter metadata
+        $cacheKey = $this->getHandlerCacheKey($class, $handler);
         if (!isset($this->reflectionCache[$cacheKey])) {
-            $this->reflectionCache[$cacheKey] = $this->extractParameterMetadata($class, $method);
+            $this->reflectionCache[$cacheKey] = $this->extractParameterMetadata($class, $handler);
         }
 
+        // Resolve arguments
         $paramMetadata = $this->reflectionCache[$cacheKey];
-        $args = $this->matchParametersFast($paramMetadata, $params, $request);
+        $args = $this->resolveArguments($paramMetadata, $params, $request);
 
-        // Resolve controller from container if available
-        $controller = $this->resolveController($class);
+        // Execute handler
+        if ($class === "") {
+            // Closure or callable
+            $result = $handler(...$args);
+        } else {
+            // Controller method
+            $controller = $this->resolveController($class);
+            $result = $controller->$handler(...$args);
+        }
 
-        $result = $controller->$method(...$args);
         return $result instanceof ResponseInterface
             ? $result
             : $this->createResponse($result);
     }
 
     /**
-     * Extract parameter metadata once and cache it (performance optimization)
+     * Generate cache key for handler (closure or controller method)
+     */
+    private function getHandlerCacheKey(string $class, mixed $handler): string
+    {
+        if ($class !== "") {
+            return $class . '::' . $handler;
+        }
+
+        if ($handler instanceof Closure) {
+            return 'closure_' . spl_object_hash($handler);
+        }
+
+        if (is_array($handler)) {
+            [$obj, $method] = $handler;
+            $classKey = is_object($obj) ? get_class($obj) : $obj;
+            return "array_$classKey::$method";
+        }
+
+        if (is_string($handler)) {
+            return "string_$handler";
+        }
+
+        if (is_object($handler)) {
+            return 'invokable_' . get_class($handler);
+        }
+
+        return 'handler_' . md5(serialize($handler));
+    }
+
+    /**
+     * Extract parameter metadata from handler (works for closures and methods)
      * @throws ReflectionException
      */
-    private function extractParameterMetadata(string $class, string $method): array
+    private function extractParameterMetadata(string $class, mixed $handler): array
     {
-        $reflectionClass = new ReflectionClass($class);
-        $reflection = $reflectionClass->getMethod($method);
-        $metadata = [];
+        // Get reflection based on handler type
+        if ($class === "") {
+            // Closure or callable
+            $reflection = new ReflectionFunction($handler);
+        } else {
+            // Controller method
+            if (!class_exists($class)) {
+                throw new ClassNotFoundException("Class not found: $class");
+            }
+            if (!method_exists($class, $handler)) {
+                throw new ClassNotFoundException("Method not found: $handler in $class");
+            }
+            $reflection = new ReflectionClass($class)->getMethod($handler);
+        }
 
+        // Extract metadata
+        $metadata = [];
         foreach ($reflection->getParameters() as $param) {
             $type = $param->getType();
             $metadata[] = [
@@ -558,9 +594,9 @@ class Routing
     }
 
     /**
-     * Fast parameter matching using cached metadata (much faster than reflection on every request)
+     * Resolve method/closure arguments from route params and container
      */
-    private function matchParametersFast(
+    private function resolveArguments(
         array $parameterMetadata,
         array $params,
         ServerRequestInterface $request,
@@ -1034,7 +1070,7 @@ class Routing
      */
     private function resolveController(string $class): object
     {
-        // FIX: If container explicitly has the definition, use it.
+        // If container explicitly has the definition, use it.
         // If getting it fails, let the exception bubble up so we know WHY it failed.
         if ($this->container !== null && $this->container->has($class)) {
             return $this->container->get($class);
@@ -1053,7 +1089,6 @@ class Routing
             return true;
         }
 
-        // FIX: Replaced non-existent array_any function with standard loop
         return array_any($this->allowedDomains, fn($allowedDomain) => $this->matchDomain($allowedDomain, $host) !== false);
 
     }
@@ -1127,5 +1162,4 @@ class Routing
 
         return false;
     }
-
 }
