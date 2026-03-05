@@ -42,7 +42,10 @@
   "autoload": {
     "psr-4": {
       "ElliePHP\\Components\\Routing\\": "src/"
-    }
+    },
+    "files": [
+      "src/helpers.php"
+    ]
   },
   "autoload-dev": {
     "psr-4": {

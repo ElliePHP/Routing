@@ -206,6 +206,69 @@ Router::get('/user/profile', function () {
 
 You can then reference the route by name instead of URI. Names should be unique across your application.
 
+### URL Generation
+
+Generate URLs for named routes using the global `route()` helper or the `Router::route()` method. This is the recommended way to link between different parts of your application.
+
+**Basic Route:**
+```php
+Router::get('/users', function() {}, ['name' => 'users.index']);
+
+$url = route('users.index'); // Returns "http://localhost/users"
+```
+
+**With Parameters:**
+For routes with required parameters, pass them as an associative array:
+```php
+Router::get('/users/{id}', function() {}, ['name' => 'users.show']);
+
+$url = route('users.show', ['id' => 123]); // Returns "http://localhost/users/123"
+```
+
+**Optional Parameters:**
+Both FastRoute syntax (`[{param}]`) and Laravel syntax (`{param?}`) are supported:
+```php
+// FastRoute style
+Router::get('/archive/[{year}]', function() {}, ['name' => 'archive']);
+$url = route('archive', ['year' => 2023]); // Returns "http://localhost/archive/2023"
+$url = route('archive'); // Returns "http://localhost/archive/"
+
+// Laravel style
+Router::get('/posts/{id?}', function() {}, ['name' => 'posts.show']);
+$url = route('posts.show', ['id' => 123]); // Returns "http://localhost/posts/123"
+$url = route('posts.show'); // Returns "http://localhost/posts/"
+```
+
+**Query String Generation:**
+Any parameters that are not part of the route path are automatically appended as a query string:
+```php
+Router::get('/users', function() {}, ['name' => 'users.index']);
+
+$url = route('users.index', ['page' => 1, 'sort' => 'asc']); 
+// Returns "http://localhost/users?page=1&sort=asc"
+```
+
+**Domain-Aware URLs:**
+If a route or group is restricted to a domain, the generated URL will automatically include that domain:
+```php
+Router::domain('{account}.myapp.com')->group(function () {
+    Router::get('/dashboard', function() {})->name('dashboard');
+});
+
+$url = route('dashboard', ['account' => 'acme']);
+// Returns "http://acme.myapp.com/dashboard"
+```
+
+**Absolute vs Relative URLs:**
+By default, `route()` returns absolute URLs. Pass `false` as the third parameter to get a relative path:
+```php
+$url = route('users.index', [], false); // Returns "/users"
+```
+
+**Error Handling:**
+- `RouteNotFoundException`: Thrown if the specified route name does not exist.
+- `InvalidArgumentException`: Thrown if a required route parameter is missing.
+
 ---
 
 ## Route Parameters

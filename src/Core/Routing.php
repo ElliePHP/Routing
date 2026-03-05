@@ -973,6 +973,80 @@ class Routing
     }
 
     /**
+     * Get the URL for a given route name and parameters
+     *
+     * @param string $name Route name
+     * @param array $parameters Route parameters (placeholders or query string)
+     * @param bool $absolute Whether to return an absolute URL (includes host)
+     * @return string Generated URL
+     * @throws RouteNotFoundException If route with the given name is not found
+     * @throws \InvalidArgumentException If required parameters are missing
+     */
+    public function route(string $name, array $parameters = [], bool $absolute = true): string
+    {
+        $route = null;
+        foreach ($this->routes as $r) {
+            if ($r['name'] === $name) {
+                $route = $r;
+                break;
+            }
+        }
+
+        if ($route === null) {
+            throw new RouteNotFoundException("Route with name '$name' not found.");
+        }
+
+        $path = $route['path'];
+        $unusedParameters = $parameters;
+
+        // Replace parameters in path
+        $path = preg_replace_callback('/\[?\{([^}?]+)(\?)?\}\]?/', function ($matches) use (&$unusedParameters, $name) {
+            $paramName = $matches[1];
+            $isOptional = str_contains($matches[0], '[') || (isset($matches[2]) && $matches[2] === '?');
+
+            if (isset($unusedParameters[$paramName])) {
+                $value = (string)$unusedParameters[$paramName];
+                unset($unusedParameters[$paramName]);
+                return $value;
+            }
+
+            if ($isOptional) {
+                return '';
+            }
+
+            throw new \InvalidArgumentException("Missing required parameter '$paramName' for route '$name'.");
+        }, $path);
+
+        // Remove any remaining optional brackets if they weren't matched
+        $path = str_replace(['[', ']'], '', $path);
+
+        if ($absolute) {
+            $domain = $route['domain'] ?? 'localhost';
+            
+            // Check if domain is a pattern like {account}.example.com
+            $domain = preg_replace_callback('/\{([^}?]+)(\?)?\}/', function ($matches) use (&$unusedParameters) {
+                $paramName = $matches[1];
+                if (isset($unusedParameters[$paramName])) {
+                    $value = (string)$unusedParameters[$paramName];
+                    unset($unusedParameters[$paramName]);
+                    return $value;
+                }
+                return $matches[0];
+            }, $domain);
+
+            $path = 'http://' . $domain . $path; // Default to http, or should we detect? Laravel uses current scheme.
+        }
+
+        // Append remaining parameters as query string
+        if (!empty($unusedParameters)) {
+            $queryString = http_build_query($unusedParameters);
+            $path .= (str_contains($path, '?') ? '&' : '?') . $queryString;
+        }
+
+        return $path;
+    }
+
+    /**
      * Get all registered routes
      */
     public function getRoutes(): array
