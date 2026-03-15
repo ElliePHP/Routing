@@ -237,7 +237,7 @@ class Routing
                 $response = $response
                     ->withHeader('X-Debug-Time', $timing['duration_ms'] . 'ms')
                     ->withHeader('X-Router', 'ElliePHP Router')
-                    ->withHeader('X-Router-Version', '1.0.22')
+                    ->withHeader('X-Router-Version', '1.0.25')
                     ->withHeader('X-Debug-Routes', (string)count($this->routes));
             }
 
