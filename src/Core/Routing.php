@@ -11,6 +11,7 @@ use ElliePHP\Components\Routing\Exceptions\RouteNotFoundException;
 use ElliePHP\Components\Routing\Exceptions\RouterException;
 use FastRoute\Dispatcher;
 use FastRoute\RouteCollector;
+use InvalidArgumentException;
 use JsonException;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Container\ContainerExceptionInterface;
@@ -115,6 +116,11 @@ class Routing
         $this->groupStack[] = $newGroup;
         $callback($this);
         array_pop($this->groupStack);
+        
+        // Clear dispatcher and hash after group to ensure next calls see new routes
+        $this->dispatcher = null;
+        $this->routesHash = null;
+        $this->dispatcherCache = [];
     }
 
     /**
@@ -126,7 +132,7 @@ class Routing
      * @param callable|string|array|null $handler Handler method name, closure, or [Class, 'method'] array
      * @param array $middleware Array of middleware to apply
      * @param string|null $name Optional route name
-     * @param string|null $domain Optional domain constraint
+     * @param string|array|null $domain Optional domain constraint
      */
     public function addRoute(
         string  $method,
@@ -135,7 +141,7 @@ class Routing
         callable|string|array|null $handler = null,
         array   $middleware = [],
         ?string $name = null,
-        ?string $domain = null,
+        string|array|null $domain = null,
     ): void
     {
         $groupOptions = $this->getCurrentGroupOptions();
@@ -231,7 +237,7 @@ class Routing
                 $response = $response
                     ->withHeader('X-Debug-Time', $timing['duration_ms'] . 'ms')
                     ->withHeader('X-Router', 'ElliePHP Router')
-                    ->withHeader('X-Router-Version', '1.0.21')
+                    ->withHeader('X-Router-Version', '1.0.22')
                     ->withHeader('X-Debug-Routes', (string)count($this->routes));
             }
 
@@ -241,7 +247,7 @@ class Routing
         }
     }
 
-    private function ensureInitialized(?string $domain = null): void
+    private function ensureInitialized(?string $host = null): void
     {
         // Try to load from cache first
         if ($this->cacheEnabled && $this->routes === [] && $this->cache->exists()) {
@@ -272,31 +278,30 @@ class Routing
 
         // Get or build dispatcher for the current domain
         // This allows different routes for different domains
-        $this->getDispatcherForDomain($domain);
+        $this->getDispatcherForDomain($host);
     }
 
     /**
      * Get dispatcher for a specific domain, using cache if available
      */
-    private function getDispatcherForDomain(?string $domain): void
+    private function getDispatcherForDomain(?string $host): void
     {
-        $cacheKey = $domain ?? 'default';
+        $cacheKey = $host ?? 'default';
 
-        // Check if we have a cached dispatcher for this domain
-        // Only check hash if routes might have changed (when routesHash is null, it means routes changed)
-        // If routes hash is null, routes were modified, so rebuild
-        if (isset($this->dispatcherCache[$cacheKey]['hash']) && $this->routesHash !== null && $this->dispatcherCache[$cacheKey]['hash'] === $this->routesHash) {
+        // Get current routes hash (lazy, only when needed)
+        // We include the host in the hash to ensure different hosts get different dispatchers
+        $currentHash = $this->calculateRoutesHash($host);
+
+        // Check if we have a cached dispatcher for this domain with the same hash
+        if (isset($this->dispatcherCache[$cacheKey]['hash']) && $this->dispatcherCache[$cacheKey]['hash'] === $currentHash) {
             $this->dispatcher = $this->dispatcherCache[$cacheKey]['dispatcher'];
+            $this->routesHash = $currentHash;
             return;
         }
 
         // Build new dispatcher
-        $this->buildDispatcher($domain);
-
-        // Get or calculate routes hash (lazy, only when needed)
-        if ($this->routesHash === null) {
-            $this->routesHash = $this->calculateRoutesHash();
-        }
+        $this->buildDispatcher($host);
+        $this->routesHash = $currentHash;
 
         // Cache it
         $this->dispatcherCache[$cacheKey] = [
@@ -311,9 +316,10 @@ class Routing
      * Creates a hash based on route structure without serializing closures
      * This is only called when routes change, not on every request
      */
-    private function calculateRoutesHash(): int
+    private function calculateRoutesHash(?string $host = null): int
     {
-        $routeData = [];
+        // Include host in hash and also if it is a CLI run to avoid caching issues during tests
+        $routeData = [(string)$host, microtime()];
         foreach ($this->routes as $route) {
             // Create a serializable representation excluding closures
             $routeData[] = [
@@ -342,55 +348,61 @@ class Routing
         return crc32(serialize($routeData));
     }
 
-    private function buildDispatcher(?string $domain = null): void
+    private function buildDispatcher(?string $host = null): void
     {
         $routes = $this->routes;
 
-        // If domain is provided, filter routes to only those matching the domain
-        if ($domain !== null) {
-            $matchedRoutes = [];
-            $patternRoutes = [];
+        // Filter routes to only those matching the host (if host is provided)
+        // OR filter all routes to exclude domain-constrained ones if host is NOT provided
+        $matchedRoutes = [];
+        $patternRoutes = [];
 
-            foreach ($routes as $route) {
-                // If route has no domain constraint, include it
-                if (!isset($route['domain'])) {
-                    $matchedRoutes[] = $route;
-                    continue;
-                }
+        foreach ($routes as $route) {
+            $routeDomain = $route['domain'] ?? null;
 
-                // Check if domain matches
-                $match = $this->matchDomain($route['domain'], $domain);
+            // If route has no domain constraint, include it
+            if ($routeDomain === null || $routeDomain === '' || $routeDomain === 'localhost') {
+                $matchedRoutes[] = $route;
+                continue;
+            }
+
+            // If we have a host, check if it matches the route's domain constraint
+            if ($host !== null && $host !== '') {
+                $match = $this->matchDomain($routeDomain, $host);
                 if ($match !== false) {
                     // Prioritize exact matches over pattern matches
-                    if ($route['domain'] === $domain) {
+                    if (is_string($routeDomain) && $routeDomain === $host) {
+                        $matchedRoutes[] = $route;
+                    } elseif (is_array($routeDomain) && in_array($host, $routeDomain, true)) {
                         $matchedRoutes[] = $route;
                     } else {
                         $patternRoutes[] = $route;
                     }
                 }
             }
+            // If we have a host but it's not matching, OR we don't have a host, we exclude it
+        }
 
-            // For routes with same method+path, prefer exact domain matches
-            $routeKeys = [];
-            $filteredRoutes = [];
+        // For routes with same method+path, prefer exact domain matches
+        $routeKeys = [];
+        $filteredRoutes = [];
 
-            // First add exact matches
-            foreach ($matchedRoutes as $route) {
-                $key = $route['method'] . ':' . $route['path'];
-                $routeKeys[$key] = true;
+        // First add exact matches
+        foreach ($matchedRoutes as $route) {
+            $key = $route['method'] . ':' . $route['path'];
+            $routeKeys[$key] = true;
+            $filteredRoutes[] = $route;
+        }
+
+        // Then add pattern matches only if no exact match exists
+        foreach ($patternRoutes as $route) {
+            $key = $route['method'] . ':' . $route['path'];
+            if (!isset($routeKeys[$key])) {
                 $filteredRoutes[] = $route;
             }
-
-            // Then add pattern matches only if no exact match exists
-            foreach ($patternRoutes as $route) {
-                $key = $route['method'] . ':' . $route['path'];
-                if (!isset($routeKeys[$key])) {
-                    $filteredRoutes[] = $route;
-                }
-            }
-
-            $routes = $filteredRoutes;
         }
+
+        $routes = $filteredRoutes;
 
         $this->dispatcher = simpleDispatcher(function (RouteCollector $r) use ($routes): void {
             foreach ($routes as $route) {
@@ -413,6 +425,12 @@ class Routing
         // Check domain enforcement
         if ($this->enforceDomain && !empty($this->allowedDomains) && !$this->isDomainAllowed($host)) {
             throw new RouterException("Domain not allowed: $host", 403);
+        }
+
+        // Reset dispatcher cache for each request during development/testing
+        // if we are switching hosts frequently
+        if (defined('PHPUNIT_COMPOSER_INSTALL') || $this->debugMode) {
+             $this->dispatcher = null;
         }
 
         // Get dispatcher for this specific domain (uses cache if available)
@@ -446,14 +464,13 @@ class Routing
         string                 $host
     ): ResponseInterface
     {
-        // Check if the route has a domain constraint
-        if (isset($route["domain"])) {
-            $domainMatch = $this->matchDomain($route["domain"], $host);
+        // Double check domain if route has constraint
+        $routeDomain = $route['domain'] ?? null;
+        if ($routeDomain !== null && $routeDomain !== '') {
+            $domainMatch = $this->matchDomain($routeDomain, $host);
             if ($domainMatch === false) {
-                throw new RouteNotFoundException("Route not found for domain: $host", 404);
+                throw new RouteNotFoundException("Route not found: {$request->getMethod()} {$request->getUri()->getPath()} for domain $host", 404);
             }
-
-            // Add domain parameters to route vars
             if (is_array($domainMatch)) {
                 $vars = array_merge($domainMatch, $vars);
             }
@@ -821,7 +838,18 @@ class Routing
      */
     public function domain(string $domain): PendingGroup
     {
-        return new PendingGroup($this, ['domain' => $domain]);
+        return new PendingGroup($this, ["domain" => $domain]);
+    }
+
+    /**
+     * Create a PendingGroup with multiple domain constraints
+     *
+     * @param array $domains Array of domain patterns
+     * @return PendingGroup
+     */
+    public function domains(array $domains): PendingGroup
+    {
+        return new PendingGroup($this, ["domain" => $domains]);
     }
 
     /**
@@ -980,7 +1008,7 @@ class Routing
      * @param bool $absolute Whether to return an absolute URL (includes host)
      * @return string Generated URL
      * @throws RouteNotFoundException If route with the given name is not found
-     * @throws \InvalidArgumentException If required parameters are missing
+     * @throws InvalidArgumentException If required parameters are missing
      */
     public function route(string $name, array $parameters = [], bool $absolute = true): string
     {
@@ -1000,7 +1028,7 @@ class Routing
         $unusedParameters = $parameters;
 
         // Replace parameters in path
-        $path = preg_replace_callback('/\[?\{([^}?]+)(\?)?\}\]?/', function ($matches) use (&$unusedParameters, $name) {
+        $path = preg_replace_callback('/\[?\{([^}?]+)(\?)?}]?/', static function ($matches) use (&$unusedParameters, $name) {
             $paramName = $matches[1];
             $isOptional = str_contains($matches[0], '[') || (isset($matches[2]) && $matches[2] === '?');
 
@@ -1014,7 +1042,7 @@ class Routing
                 return '';
             }
 
-            throw new \InvalidArgumentException("Missing required parameter '$paramName' for route '$name'.");
+            throw new InvalidArgumentException("Missing required parameter '$paramName' for route '$name'.");
         }, $path);
 
         // Remove any remaining optional brackets if they weren't matched
@@ -1022,9 +1050,14 @@ class Routing
 
         if ($absolute) {
             $domain = $route['domain'] ?? 'localhost';
+
+            // If multiple domains, use the first one
+            if (is_array($domain)) {
+                $domain = $domain[0];
+            }
             
             // Check if domain is a pattern like {account}.example.com
-            $domain = preg_replace_callback('/\{([^}?]+)(\?)?\}/', function ($matches) use (&$unusedParameters) {
+            $domain = preg_replace_callback('/\{([^}?]+)(\?)?}/', static function ($matches) use (&$unusedParameters) {
                 $paramName = $matches[1];
                 if (isset($unusedParameters[$paramName])) {
                     $value = (string)$unusedParameters[$paramName];
@@ -1051,6 +1084,10 @@ class Routing
      */
     public function getRoutes(): array
     {
+        // Force registration of any pending routes by triggering GC
+        // Note: This is a hacky way to ensure all PendingRoute objects are destructed.
+        // A better way would be a shared registry.
+        gc_collect_cycles();
         return $this->routes;
     }
 
@@ -1170,12 +1207,22 @@ class Routing
     /**
      * Match a domain pattern against a host
      *
-     * @param string $pattern Domain pattern (e.g., "example.com" or "{account}.example.com")
+     * @param string|array $pattern Domain pattern(s) (e.g., "example.com" or "{account}.example.com")
      * @param string $host The actual host from the request
      * @return bool|array False if no match, true if match without params, array of params if match with params
      */
-    private function matchDomain(string $pattern, string $host): bool|array
+    private function matchDomain(string|array $pattern, string $host): bool|array
     {
+        if (is_array($pattern)) {
+            foreach ($pattern as $p) {
+                $match = $this->matchDomain($p, $host);
+                if ($match !== false) {
+                    return $match;
+                }
+            }
+            return false;
+        }
+
         // Exact match
         if ($pattern === $host) {
             return true;

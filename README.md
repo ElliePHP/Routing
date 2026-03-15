@@ -259,6 +259,15 @@ $url = route('dashboard', ['account' => 'acme']);
 // Returns "http://acme.myapp.com/dashboard"
 ```
 
+If multiple domains are specified, the first one in the list is used for URL generation:
+```php
+Router::domains(['api.myapp.com', 'admin.myapp.com'])->group(function () {
+    Router::get('/status', function() {})->name('status');
+});
+
+$url = route('status'); // Returns "http://api.myapp.com/status"
+```
+
 **Absolute vs Relative URLs:**
 By default, `route()` returns absolute URLs. Pass `false` as the third parameter to get a relative path:
 ```php
@@ -427,6 +436,26 @@ Router::domain('api.example.com')->group(function () {
 ```
 
 This route only matches requests to `api.example.com/users`, not `example.com/users` or `www.example.com/users`.
+
+### Multiple Domains
+
+Restrict a group or route to multiple domains simultaneously using the `domains()` method:
+
+```php
+// On a group
+Router::domains(['api.example.com', 'admin.example.com'])->group(function () {
+    Router::get('/status', function () {
+        return ['status' => 'OK'];
+    });
+});
+
+// On a single route
+Router::get('/special', function() {
+    return 'Special content';
+})->domains(['app1.com', 'app2.com']);
+```
+
+This route will match requests from any of the specified domains. For URL generation, the first domain in the list is used as the primary domain.
 
 ### Subdomain Parameters
 
@@ -977,7 +1006,7 @@ Debug mode provides:
 
 ### Route Inspection
 
-Print all registered routes in a formatted table:
+Print all registered routes in a formatted table, including their domain constraints and middleware:
 
 ```php
 echo Router::printRoutes();
@@ -985,14 +1014,16 @@ echo Router::printRoutes();
 
 Output:
 ```
-+--------+-------------------------+---------+----------------------+
-| Method | URI                     | Name    | Action               |
-+--------+-------------------------+---------+----------------------+
-| GET    | /                       |         | Closure              |
-| GET    | /users                  | users   | UserController@index |
-| GET    | /users/{id}             |         | UserController@show  |
-| POST   | /users                  |         | UserController@store |
-+--------+-------------------------+---------+----------------------+
+==================================================================================================================================
+METHOD   PATH                                NAME                      DOMAIN                         HANDLER
+==================================================================================================================================
+GET      /                                   root                      *                              Closure
+GET      /users                              users.index               api.example.com                UserController@index
+         └─ Middleware: AuthMiddleware, LoggingMiddleware
+GET      /users/{id}                         users.show                *                              UserController@show
+POST     /users                              users.store               *                              UserController@store
+==================================================================================================================================
+Total routes: 4
 ```
 
 Programmatically access route information:
@@ -1001,8 +1032,7 @@ Programmatically access route information:
 $routes = Router::getRoutes();
 
 foreach ($routes as $route) {
-    echo "{$route['method']} {$route['uri']}
-";
+    echo "{$route['method']} {$route['path']}\n";
 }
 ```
 

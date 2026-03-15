@@ -92,6 +92,18 @@ class PendingRoute
     }
 
     /**
+     * Set multiple domain constraints
+     * 
+     * @param array $domains Array of domain patterns
+     * @return self
+     */
+    public function domains(array $domains): self
+    {
+        $this->options['domain'] = $domains;
+        return $this;
+    }
+
+    /**
      * Register the route when the object is destructed
      * 
      * This is called automatically when the PendingRoute goes out of scope.

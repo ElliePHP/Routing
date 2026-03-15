@@ -26,6 +26,7 @@ use Psr\Http\Message\ServerRequestInterface;
  * @method static PendingGroup prefix(string $prefix) Create a PendingGroup with a prefix
  * @method static PendingGroup middleware(array $middleware) Create a PendingGroup with middleware
  * @method static PendingGroup domain(string $domain) Create a PendingGroup with a domain constraint
+ * @method static PendingGroup domains(array $domains) Create a PendingGroup with multiple domain constraints
  * @method static PendingGroup name(string $name) Create a PendingGroup with a name prefix
  * @method static void group(array $options, callable $callback) Create a route group
  * @method static ResponseInterface handle(ServerRequestInterface $request) Handle an incoming request

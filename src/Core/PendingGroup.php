@@ -89,6 +89,18 @@ class PendingGroup
     }
 
     /**
+     * Set multiple domain constraints for the group
+     * 
+     * @param array $domains Array of domain patterns
+     * @return self
+     */
+    public function domains(array $domains): self
+    {
+        $this->options['domain'] = $domains;
+        return $this;
+    }
+
+    /**
      * Execute the group callback with accumulated configuration
      * 
      * This is a terminal method - it executes the callback and doesn't return anything.
