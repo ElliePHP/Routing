@@ -1006,11 +1006,12 @@ class Routing
      * @param string $name Route name
      * @param array $parameters Route parameters (placeholders or query string)
      * @param bool $absolute Whether to return an absolute URL (includes host)
+     * @param bool $https Whether to use HTTPS (default: true)
      * @return string Generated URL
      * @throws RouteNotFoundException If route with the given name is not found
      * @throws InvalidArgumentException If required parameters are missing
      */
-    public function route(string $name, array $parameters = [], bool $absolute = true): string
+    public function route(string $name, array $parameters = [], bool $absolute = true, bool $https = true): string
     {
         $route = null;
         foreach ($this->routes as $r) {
@@ -1067,7 +1068,13 @@ class Routing
                 return $matches[0];
             }, $domain);
 
-            $path = 'http://' . $domain . $path; // Default to http, or should we detect? Laravel uses current scheme.
+            // Check if domain already has a scheme
+            if (preg_match('/^https?:\/\//', $domain)) {
+                $path = $domain . $path;
+            } else {
+                $scheme = $https ? 'https://' : 'http://';
+                $path = $scheme . $domain . $path;
+            }
         }
 
         // Append remaining parameters as query string

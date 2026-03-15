@@ -74,7 +74,7 @@ class RouteUrlGenerationTest extends TestCase
         });
         
         $url = Router::route('api.users');
-        $this->assertEquals('http://api.example.com/users', $url);
+        $this->assertEquals('https://api.example.com/users', $url);
     }
 
     public function testGenerateUrlWithDomainParameters()
@@ -84,7 +84,7 @@ class RouteUrlGenerationTest extends TestCase
         });
         
         $url = Router::route('account.users', ['account' => 'acme']);
-        $this->assertEquals('http://acme.example.com/users', $url);
+        $this->assertEquals('https://acme.example.com/users', $url);
     }
 
     public function testGenerateUrlThrowsExceptionIfRouteNotFound()
@@ -122,6 +122,6 @@ class RouteUrlGenerationTest extends TestCase
         Router::get('/fluent', function() {})->name('fluent.route');
         
         $url = Router::route('fluent.route');
-        $this->assertEquals('http://localhost/fluent', $url);
+        $this->assertEquals('https://localhost/fluent', $url);
     }
 }

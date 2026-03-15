@@ -39,7 +39,7 @@ use Psr\Http\Message\ServerRequestInterface;
  * @method static bool isCacheEnabled() Check if cache is enabled
  * @method static void registerRoutes(array $routes) Register routes from array
  * @method static void addRoute(string $method, string $url, string $class = "", Closure|callable|string|array|null $handler = null, array $middleware = [], ?string $name = null) Register a route with the router
- * @method static string route(string $name, array $parameters = [], bool $absolute = true) Generate a URL for a given route name
+ * @method static string route(string $name, array $parameters = [], bool $absolute = true, bool $https = true) Generate a URL for a given route name
  */
 final class Router
 {

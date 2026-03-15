@@ -38,12 +38,13 @@ if (!function_exists('route')) {
      * @param array $parameters An associative array of parameters to fill in the route's path or domain. 
      *                          Any parameters not used in the path will be appended as a query string.
      * @param bool $absolute Whether to return an absolute URL (with domain and scheme). Defaults to true.
+     * @param bool $https Whether to use HTTPS (default: true).
      * @return string The generated URL.
      * @throws RouteNotFoundException If no route with the given name exists.
      * @throws InvalidArgumentException If required, parameters for the route are missing.
      */
-    function route(string $name, array $parameters = [], bool $absolute = true): string
+    function route(string $name, array $parameters = [], bool $absolute = true, bool $https = true): string
     {
-        return Router::route($name, $parameters, $absolute);
+        return Router::route($name, $parameters, $absolute, $https);
     }
 }
