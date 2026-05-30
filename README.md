@@ -125,7 +125,7 @@ Specifies where cached route files should be stored. The directory must be writa
 Automatically loads all PHP files from the specified directory. Useful for organizing routes into separate files (e.g., `routes/api.php`, `routes/web.php`).
 
 **`baseDomain(string $domain)`**  
-Sets the default domain for routes without an explicit `->domain()` constraint. Required. Routes defined outside a domain group only match this host — they will not match subdomains or other domains.
+Sets the default domain for routes without an explicit `->domain()` constraint. Required. Accepts a hostname (`example.com`) or a full URL (`https://example.com`); schemes and paths are stripped automatically. Routes defined outside a domain group only match this host — they will not match subdomains or other domains.
 
 **`enforceDomain(bool $enabled = true)`**  
 When enabled, the router will reject requests from domains not explicitly defined in your routes or allowed domains list. Critical for multi-tenant applications.

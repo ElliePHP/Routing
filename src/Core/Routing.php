@@ -76,8 +76,11 @@ class Routing
         $this->debugger = new RouteDebugger();
         $this->errorFormatter = $errorFormatter ?? new ErrorFormatter();
         $this->enforceDomain = $enforceDomain;
-        $this->allowedDomains = $allowedDomains;
-        $this->baseDomain = $baseDomain;
+        $this->allowedDomains = array_map(
+            static fn($allowed) => is_string($allowed) ? self::normalizeHost($allowed) : $allowed,
+            $allowedDomains
+        );
+        $this->baseDomain = self::normalizeHost($baseDomain);
         $this->globalMiddleware = $globalMiddleware;
         $this->container = $container;
     }
@@ -164,7 +167,7 @@ class Routing
         $allMiddleware = array_merge($groupMiddleware, $middleware);
 
         // Get domain from group if not specified
-        $routeDomain = $domain ?? $groupOptions["domain"] ?? null;
+        $routeDomain = self::normalizeDomainConstraint($domain ?? $groupOptions["domain"] ?? null);
 
         // Normalize handler/class
         if (is_array($handler) && count($handler) === 2) {
@@ -1218,6 +1221,56 @@ class Routing
 
         return array_any($this->allowedDomains, fn($allowedDomain) => $this->matchDomain($allowedDomain, $host) !== false);
 
+    }
+
+    /**
+     * Normalize a host or URL to a hostname for matching and URL generation.
+     *
+     * Accepts bare hosts (example.com), URLs (https://example.com/path), or host/path without scheme.
+     * Domain patterns with placeholders (e.g. {tenant}.example.com) are returned unchanged.
+     */
+    public static function normalizeHost(string $host): string
+    {
+        $host = trim($host);
+        if ($host === '') {
+            return $host;
+        }
+
+        if (str_contains($host, '://')) {
+            $parsed = parse_url($host, PHP_URL_HOST);
+            if (is_string($parsed) && $parsed !== '') {
+                return $parsed;
+            }
+        }
+
+        if (str_contains($host, '/')) {
+            $parsed = parse_url('http://' . $host, PHP_URL_HOST);
+            if (is_string($parsed) && $parsed !== '') {
+                return $parsed;
+            }
+        }
+
+        return rtrim($host, '/');
+    }
+
+    /**
+     * @param string|array|null $domain
+     * @return string|array|null
+     */
+    private static function normalizeDomainConstraint(string|array|null $domain): string|array|null
+    {
+        if ($domain === null) {
+            return null;
+        }
+
+        if (is_array($domain)) {
+            return array_map(
+                static fn($entry) => is_string($entry) ? self::normalizeHost($entry) : $entry,
+                $domain
+            );
+        }
+
+        return self::normalizeHost($domain);
     }
 
     /**

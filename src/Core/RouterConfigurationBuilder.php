@@ -134,7 +134,7 @@ class RouterConfigurationBuilder
     /**
      * Set the base domain for routes without an explicit domain constraint
      *
-     * @param string $domain Base domain (e.g. example.com)
+     * @param string $domain Base domain or full URL (e.g. example.com or https://example.com)
      * @return self
      */
     public function baseDomain(string $domain): self

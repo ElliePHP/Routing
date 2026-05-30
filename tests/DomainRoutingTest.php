@@ -275,4 +275,48 @@ class DomainRoutingTest extends TestCase
         $this->assertEquals('app', $body['subdomain']);
         $this->assertEquals('us-east', $body['region']);
     }
+
+    public function testNormalizeHostStripsUrlScheme(): void
+    {
+        $this->assertSame('api.example.com', Routing::normalizeHost('https://api.example.com'));
+        $this->assertSame('api.example.com', Routing::normalizeHost('http://api.example.com/v2'));
+        $this->assertSame('api.example.com', Routing::normalizeHost('api.example.com'));
+        $this->assertSame('{tenant}.example.com', Routing::normalizeHost('{tenant}.example.com'));
+    }
+
+    public function testBaseDomainAcceptsFullUrl(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/ellie_test_routes_url_' . uniqid();
+        mkdir($tempDir);
+        file_put_contents($tempDir . '/empty.php', '<?php // Empty route file');
+
+        $router = new Routing(
+            routes_directory: $tempDir,
+            debugMode: false,
+            cacheEnabled: false,
+            baseDomain: 'https://example.com'
+        );
+
+        $router->get('/from-url', function () {
+            return ['ok' => true];
+        });
+
+        $request = new ServerRequest('GET', 'http://example.com/from-url');
+        $response = $router->handle($request);
+        $this->assertEquals(200, $response->getStatusCode());
+
+        unlink($tempDir . '/empty.php');
+        rmdir($tempDir);
+    }
+
+    public function testPerRouteDomainAcceptsFullUrl(): void
+    {
+        $this->router->get('/openapi', function () {
+            return ['host' => 'openapi'];
+        }, ['domain' => 'https://api.example.com']);
+
+        $request = new ServerRequest('GET', 'http://api.example.com/openapi');
+        $response = $this->router->handle($request);
+        $this->assertEquals(200, $response->getStatusCode());
+    }
 }

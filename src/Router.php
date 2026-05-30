@@ -78,7 +78,7 @@ final class Router
      *   - error_formatter: Custom error formatter instance
      *   - enforce_domain: Reject requests from domains not in allowed_domains
      *   - allowed_domains: Array of allowed domains (supports patterns like {tenant}.example.com)
-     *   - base_domain: Default domain for routes without an explicit domain constraint (required)
+     *   - base_domain: Default domain for routes without an explicit domain constraint (required; host or full URL)
      *   - global_middleware: Array of middleware classes to apply to all routes
      *   - container: PSR-11 container for dependency injection
      *
