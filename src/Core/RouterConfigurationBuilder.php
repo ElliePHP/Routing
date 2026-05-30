@@ -132,6 +132,18 @@ class RouterConfigurationBuilder
     }
 
     /**
+     * Set the base domain for routes without an explicit domain constraint
+     *
+     * @param string $domain Base domain (e.g. example.com)
+     * @return self
+     */
+    public function baseDomain(string $domain): self
+    {
+        $this->config['base_domain'] = $domain;
+        return $this;
+    }
+
+    /**
      * Set allowed domains list
      *
      * @param array $domains Array of allowed domain patterns
@@ -239,6 +251,7 @@ class RouterConfigurationBuilder
         $this->validateMiddleware($mergedConfig);
 
         // Validate domains
+        $this->validateBaseDomain($mergedConfig);
         $this->validateDomains($mergedConfig);
 
         // Validate boolean options
@@ -267,6 +280,19 @@ class RouterConfigurationBuilder
                     "Invalid middleware at index $index: must be string, object, or callable"
                 );
             }
+        }
+    }
+
+    /**
+     * Validate base domain configuration
+     *
+     * @param array $config Configuration array
+     * @throws RouterException If base domain is missing or invalid
+     */
+    private function validateBaseDomain(array $config): void
+    {
+        if (!isset($config['base_domain']) || !is_string($config['base_domain']) || $config['base_domain'] === '') {
+            throw new RouterException('base_domain is required. Call ->baseDomain(\'example.com\') before build().');
         }
     }
 

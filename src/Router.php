@@ -59,6 +59,7 @@ final class Router
         'error_formatter' => null,
         'enforce_domain' => false,
         'allowed_domains' => [],
+        'base_domain' => null,
         'global_middleware' => [],
         'container' => null,
     ];
@@ -77,6 +78,7 @@ final class Router
      *   - error_formatter: Custom error formatter instance
      *   - enforce_domain: Reject requests from domains not in allowed_domains
      *   - allowed_domains: Array of allowed domains (supports patterns like {tenant}.example.com)
+     *   - base_domain: Default domain for routes without an explicit domain constraint (required)
      *   - global_middleware: Array of middleware classes to apply to all routes
      *   - container: PSR-11 container for dependency injection
      *
@@ -117,6 +119,10 @@ final class Router
     public static function getInstance(): EllieRouter
     {
         if (!self::$instance instanceof EllieRouter) {
+            if (empty(self::$config['base_domain'])) {
+                throw new RouterException('base_domain is required. Set it via Router::configure([\'base_domain\' => \'example.com\']) or ->baseDomain(\'example.com\').');
+            }
+
             self::$instance = new EllieRouter(
                 self::$config['routes_directory'],
                 self::$config['debug_mode'],
@@ -125,6 +131,7 @@ final class Router
                 self::$config['error_formatter'],
                 self::$config['enforce_domain'],
                 self::$config['allowed_domains'],
+                self::$config['base_domain'],
                 self::$config['global_middleware'],
                 self::$config['container']
             );
@@ -157,6 +164,7 @@ final class Router
             'error_formatter' => null,
             'enforce_domain' => false,
             'allowed_domains' => [],
+            'base_domain' => null,
             'global_middleware' => [],
             'container' => null,
         ];

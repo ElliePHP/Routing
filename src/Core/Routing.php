@@ -47,6 +47,7 @@ class Routing
     private ?float $requestStartTime = null;
     private readonly bool $enforceDomain;
     private readonly array $allowedDomains;
+    private readonly string $baseDomain;
     private array $domainRegexCache = [];
     private ?int $routesHash = null;
     private array $reflectionCache = [];
@@ -61,6 +62,7 @@ class Routing
         ?ErrorFormatterInterface $errorFormatter = null,
         bool $enforceDomain = false,
         array $allowedDomains = [],
+        string $baseDomain = 'localhost',
         array $globalMiddleware = [],
         ?ContainerInterface $container = null
     ) {
@@ -75,6 +77,7 @@ class Routing
         $this->errorFormatter = $errorFormatter ?? new ErrorFormatter();
         $this->enforceDomain = $enforceDomain;
         $this->allowedDomains = $allowedDomains;
+        $this->baseDomain = $baseDomain;
         $this->globalMiddleware = $globalMiddleware;
         $this->container = $container;
     }
@@ -360,9 +363,13 @@ class Routing
         foreach ($routes as $route) {
             $routeDomain = $route['domain'] ?? null;
 
-            // If route has no domain constraint, include it
-            if ($routeDomain === null || $routeDomain === '' || $routeDomain === 'localhost') {
-                $matchedRoutes[] = $route;
+            // Domain-less routes only match the base domain (or empty host for CLI/tests)
+            if ($routeDomain === null || $routeDomain === '') {
+                $include = ($host === null || $host === '')
+                    || $this->matchDomain($this->baseDomain, $host) !== false;
+                if ($include) {
+                    $matchedRoutes[] = $route;
+                }
                 continue;
             }
 
@@ -474,6 +481,8 @@ class Routing
             if (is_array($domainMatch)) {
                 $vars = array_merge($domainMatch, $vars);
             }
+        } elseif ($host !== '' && $this->matchDomain($this->baseDomain, $host) === false) {
+            throw new RouteNotFoundException("Route not found: {$request->getMethod()} {$request->getUri()->getPath()} for domain $host", 404);
         }
 
         $routeMiddlewares = $route["middleware"] ?? [];
@@ -1050,7 +1059,7 @@ class Routing
         $path = str_replace(['[', ']'], '', $path);
 
         if ($absolute) {
-            $domain = $route['domain'] ?? 'localhost';
+            $domain = $route['domain'] ?? $this->baseDomain;
 
             // If multiple domains, use the first one
             if (is_array($domain)) {

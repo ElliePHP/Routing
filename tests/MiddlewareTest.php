@@ -28,6 +28,7 @@ class MiddlewareTest extends TestCase
     protected function setUp(): void
     {
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         Router::reset();
     }
 

@@ -13,6 +13,7 @@ class RouterTest extends TestCase
     protected function setUp(): void
     {
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         Router::reset();
     }
 
@@ -235,6 +236,7 @@ class RouterTest extends TestCase
     {
         // Reset to ensure clean state
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         
         // Test that configure() without parameters returns a RouterConfigurationBuilder
         $builder = Router::configure();
@@ -245,6 +247,7 @@ class RouterTest extends TestCase
     {
         // Reset to ensure clean state
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         
         // Test that fluent methods return the same builder instance for chaining
         $builder = Router::configure();
@@ -261,7 +264,7 @@ class RouterTest extends TestCase
         Router::resetInstance();
         
         // Test that existing array-based configuration still works
-        Router::configure(['debug_mode' => true]);
+        Router::configure(['debug_mode' => true, 'base_domain' => 'localhost']);
         
         // Should be able to create routes after array configuration
         Router::get('/test', function () {
@@ -277,6 +280,7 @@ class RouterTest extends TestCase
     {
         // Reset to ensure clean state, then initialize router
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         Router::getInstance();
         
         $this->expectException(\ElliePHP\Components\Routing\Exceptions\RouterException::class);
@@ -289,6 +293,7 @@ class RouterTest extends TestCase
     {
         // Reset to ensure clean state, then initialize router
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         Router::getInstance();
         
         $this->expectException(\ElliePHP\Components\Routing\Exceptions\RouterException::class);
@@ -307,6 +312,7 @@ class RouterTest extends TestCase
             ->debugMode(true)
             ->disableCache()
             ->routesDirectory('/')
+            ->baseDomain('localhost')
             ->build();
         
         // Should be able to create routes after fluent configuration

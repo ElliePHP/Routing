@@ -27,7 +27,8 @@ class DomainRoutingTest extends TestCase
             debugMode: false,
             cacheEnabled: false,
             enforceDomain: false,
-            allowedDomains: ['example.com', 'api.example.com', '{tenant}.example.com']
+            allowedDomains: ['example.com', 'api.example.com', '{tenant}.example.com'],
+            baseDomain: 'example.com'
         );
     }
 
@@ -147,7 +148,8 @@ class DomainRoutingTest extends TestCase
             debugMode: false,
             cacheEnabled: false,
             enforceDomain: true,
-            allowedDomains: ['example.com', 'api.example.com']
+            allowedDomains: ['example.com', 'api.example.com'],
+            baseDomain: 'example.com'
         );
 
         $router->get('/', function () {
@@ -165,20 +167,77 @@ class DomainRoutingTest extends TestCase
         rmdir($tempDir);
     }
 
-    public function testRouteWithoutDomainMatchesAnyDomain(): void
+    public function testRouteWithoutDomainMatchesBaseDomainOnly(): void
     {
         $this->router->get('/public', function () {
             return ['message' => 'public'];
         });
 
-        // Should work on any domain
-        $request1 = new ServerRequest('GET', 'http://example.com/public');
-        $response1 = $this->router->handle($request1);
-        $this->assertEquals(200, $response1->getStatusCode());
+        $request = new ServerRequest('GET', 'http://example.com/public');
+        $response = $this->router->handle($request);
+        $this->assertEquals(200, $response->getStatusCode());
 
-        $request2 = new ServerRequest('GET', 'http://api.example.com/public');
-        $response2 = $this->router->handle($request2);
-        $this->assertEquals(200, $response2->getStatusCode());
+        $body = json_decode((string)$response->getBody(), true);
+        $this->assertEquals('public', $body['message']);
+    }
+
+    public function testRouteWithoutDomainReturns404OnSubdomain(): void
+    {
+        $this->router->get('/public', function () {
+            return ['message' => 'public'];
+        });
+
+        $request = new ServerRequest('GET', 'http://api.example.com/public');
+        $response = $this->router->handle($request);
+        $this->assertEquals(404, $response->getStatusCode());
+    }
+
+    public function testMixedPathCollisionResolvesToCorrectDomain(): void
+    {
+        $this->router->get('/dashboard', function () {
+            return ['message' => 'main dashboard'];
+        });
+
+        $this->router->get('/dashboard', function () {
+            return ['message' => 'api dashboard'];
+        }, ['domain' => 'api.example.com']);
+
+        $mainRequest = new ServerRequest('GET', 'http://example.com/dashboard');
+        $mainResponse = $this->router->handle($mainRequest);
+        $this->assertEquals(200, $mainResponse->getStatusCode());
+        $mainBody = json_decode((string)$mainResponse->getBody(), true);
+        $this->assertEquals('main dashboard', $mainBody['message']);
+
+        $apiRequest = new ServerRequest('GET', 'http://api.example.com/dashboard');
+        $apiResponse = $this->router->handle($apiRequest);
+        $this->assertEquals(200, $apiResponse->getStatusCode());
+        $apiBody = json_decode((string)$apiResponse->getBody(), true);
+        $this->assertEquals('api dashboard', $apiBody['message']);
+    }
+
+    public function testUndomainedRouteDoesNotShadowDomainSpecificRoute(): void
+    {
+        $this->router->get('/settings', function () {
+            return ['message' => 'main settings'];
+        });
+
+        $this->router->group(['domain' => 'admin.example.com'], function ($router) {
+            $router->get('/settings', function () {
+                return ['message' => 'admin settings'];
+            });
+        });
+
+        $adminRequest = new ServerRequest('GET', 'http://admin.example.com/settings');
+        $adminResponse = $this->router->handle($adminRequest);
+        $this->assertEquals(200, $adminResponse->getStatusCode());
+        $adminBody = json_decode((string)$adminResponse->getBody(), true);
+        $this->assertEquals('admin settings', $adminBody['message']);
+
+        $mainRequest = new ServerRequest('GET', 'http://example.com/settings');
+        $mainResponse = $this->router->handle($mainRequest);
+        $this->assertEquals(200, $mainResponse->getStatusCode());
+        $mainBody = json_decode((string)$mainResponse->getBody(), true);
+        $this->assertEquals('main settings', $mainBody['message']);
     }
 
     public function testNestedDomainGroups(): void

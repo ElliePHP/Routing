@@ -11,6 +11,7 @@ use Nyholm\Psr7\ServerRequest;
 Router::configure([
     'debug_mode' => true,
     'cache_enabled' => false,
+    'base_domain' => 'example.com',
     'enforce_domain' => false, // Set to true to reject requests from unlisted domains
     'allowed_domains' => [
         'example.com',
@@ -20,13 +21,18 @@ Router::configure([
     ],
 ]);
 
-// Routes for main domain
+// Main app routes (base domain only — no need to repeat domain on each route)
 Router::get('/', static function () {
     return ['message' => 'Welcome to example.com'];
-}, ['domain' => 'example.com']);
+});
 
 Router::get('/about', static function () {
     return ['message' => 'About example.com'];
+});
+
+// Explicit domain routes (legacy style — still supported)
+Router::get('/legacy-home', static function () {
+    return ['message' => 'Legacy explicit domain route'];
 }, ['domain' => 'example.com']);
 
 // API subdomain routes

@@ -26,7 +26,9 @@ require 'vendor/autoload.php';
 use ElliePHP\Components\Routing\Router;
 use Nyholm\Psr7\ServerRequest;
 
-Router::configure()->build();
+Router::configure()
+    ->baseDomain('localhost')
+    ->build();
 
 Router::get('/', function () {
     return ['status' => 'API Online'];
@@ -63,6 +65,7 @@ Router::configure()
     ->enableCache($_ENV['APP_ENV'] === 'production')
     ->cacheDirectory(__DIR__ . '/storage/cache')
     ->routesDirectory(__DIR__ . '/routes')
+    ->baseDomain($_ENV['APP_DOMAIN'] ?? 'localhost')
     ->container($container)
     ->build();
 
@@ -98,6 +101,7 @@ Router::configure()
     ->enableCache()
     ->cacheDirectory(__DIR__ . '/storage/cache')
     ->routesDirectory(__DIR__ . '/routes')
+    ->baseDomain('example.com')
     ->enforceDomain()
     ->allowedDomains(['example.com', 'api.example.com'])
     ->addGlobalMiddleware(CorsMiddleware::class)
@@ -120,11 +124,14 @@ Specifies where cached route files should be stored. The directory must be writa
 **`routesDirectory(string $path)`**  
 Automatically loads all PHP files from the specified directory. Useful for organizing routes into separate files (e.g., `routes/api.php`, `routes/web.php`).
 
+**`baseDomain(string $domain)`**  
+Sets the default domain for routes without an explicit `->domain()` constraint. Required. Routes defined outside a domain group only match this host — they will not match subdomains or other domains.
+
 **`enforceDomain(bool $enabled = true)`**  
 When enabled, the router will reject requests from domains not explicitly defined in your routes or allowed domains list. Critical for multi-tenant applications.
 
 **`allowedDomains(array $domains)`**  
-Whitelist specific domains when domain enforcement is enabled. Requests to unlisted domains will return 404 responses.
+Whitelist specific domains when domain enforcement is enabled. Requests to unlisted domains will return 403 responses. This is a global security gate, separate from per-route domain scoping via `baseDomain()` and `->domain()`.
 
 **`addGlobalMiddleware(string $middlewareClass)`**  
 Registers middleware that executes on every single request. Perfect for CORS headers, security headers, logging, or session handling. Can be called multiple times.
@@ -425,6 +432,33 @@ Without groups, you'd need to repeat the prefix, middleware, and name prefix on 
 
 Domain routing restricts routes to specific domains or captures subdomain parameters. Essential for multi-tenant applications or API versioning via subdomains.
 
+### Base Domain
+
+Configure a base domain for routes that do not specify `->domain()`. This is **required**:
+
+```php
+Router::configure()
+    ->baseDomain('example.com')
+    ->build();
+
+// Matches example.com/about only — not api.example.com
+Router::get('/about', function () {
+    return ['message' => 'About us'];
+});
+
+Router::domain('api.example.com')->group(function () {
+    Router::get('/users', function () {
+        return ['users' => []];
+    });
+});
+```
+
+| Route definition | Matches on |
+|---|---|
+| No `domain` option | `base_domain` only |
+| `->domain('api.example.com')` | `api.example.com` only |
+| `Router::domain('{tenant}.example.com')->group(...)` | matching tenant subdomains |
+
 ### Basic Domain Restrictions
 
 Restrict a group of routes to a specific domain:
@@ -499,12 +533,13 @@ For security in multi-tenant applications, enforce that requests only come from 
 
 ```php
 Router::configure()
+    ->baseDomain('example.com')
     ->enforceDomain()
-    ->allowedDomains(['app.example.com', 'api.example.com', '*.tenant.example.com'])
+    ->allowedDomains(['example.com', 'api.example.com', '{tenant}.example.com'])
     ->build();
 ```
 
-Any request from an undefined domain returns a 404 response. This prevents your application from responding to arbitrary domains that may point to your server.
+Any request from a host not in `allowedDomains` returns a 403 response. This is a global security gate — separate from per-route domain scoping via `baseDomain()` and `->domain()`.
 
 ---
 

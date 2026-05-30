@@ -17,6 +17,7 @@ class RouterConfigurationBuilderTest extends TestCase
     protected function setUp(): void
     {
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         Router::reset();
     }
 
@@ -144,6 +145,24 @@ class RouterConfigurationBuilderTest extends TestCase
         $this->assertSame($builder, $result, 'errorFormatter() should return same builder instance');
     }
 
+    public function testBaseDomainConfiguration(): void
+    {
+        $builder = new RouterConfigurationBuilder();
+
+        $result = $builder->baseDomain('example.com');
+        $this->assertSame($builder, $result, 'baseDomain() should return same builder instance');
+    }
+
+    public function testMissingBaseDomainValidation(): void
+    {
+        Router::resetInstance();
+        $builder = Router::configure();
+
+        $this->expectException(RouterException::class);
+        $this->expectExceptionMessage('base_domain is required');
+        $builder->build();
+    }
+
     /**
      * Test terminal methods (build and apply)
      * _Requirements: 2.1, 2.2, 2.3_
@@ -154,6 +173,7 @@ class RouterConfigurationBuilderTest extends TestCase
         
         $builder = Router::configure();
         $builder->debugMode(true);
+        $builder->baseDomain('localhost');
         
         // Test build() method
         $builder->build();
@@ -165,6 +185,7 @@ class RouterConfigurationBuilderTest extends TestCase
         Router::resetInstance();
         $builder2 = Router::configure();
         $builder2->debugMode(false);
+        $builder2->baseDomain('localhost');
         $builder2->apply();
         
         $this->assertFalse(Router::isDebugMode(), 'Debug mode should be disabled after apply()');
@@ -188,6 +209,7 @@ class RouterConfigurationBuilderTest extends TestCase
         
         // Should be able to build with empty arrays
         Router::resetInstance();
+        $builder->baseDomain('localhost');
         $builder->build();
         $this->assertTrue(true, 'Should be able to build with empty arrays');
     }
@@ -224,6 +246,7 @@ class RouterConfigurationBuilderTest extends TestCase
         
         // Test path traversal in routes directory
         $builder->routesDirectory('/app/../../../etc');
+        $builder->baseDomain('localhost');
         
         $this->expectException(RouterException::class);
         $this->expectExceptionMessage('Path traversal detected in routes directory');
@@ -241,6 +264,7 @@ class RouterConfigurationBuilderTest extends TestCase
         
         // Test path traversal in cache directory
         $builder->cacheDirectory('/tmp/../../../etc');
+        $builder->baseDomain('localhost');
         
         $this->expectException(RouterException::class);
         $this->expectExceptionMessage('Path traversal detected in cache directory');
@@ -263,6 +287,7 @@ class RouterConfigurationBuilderTest extends TestCase
         $config = $configProperty->getValue($builder);
         $config['error_formatter'] = new \stdClass(); // Invalid formatter
         $configProperty->setValue($builder, $config);
+        $builder->baseDomain('localhost');
         
         $this->expectException(RouterException::class);
         $this->expectExceptionMessage('Error formatter must implement ErrorFormatterInterface');
@@ -285,6 +310,7 @@ class RouterConfigurationBuilderTest extends TestCase
         $config = $configProperty->getValue($builder);
         $config['container'] = new \stdClass(); // Invalid container
         $configProperty->setValue($builder, $config);
+        $builder->baseDomain('localhost');
         
         $this->expectException(RouterException::class);
         $this->expectExceptionMessage('Container must implement PSR-11 ContainerInterface');
@@ -307,6 +333,7 @@ class RouterConfigurationBuilderTest extends TestCase
         $config = $configProperty->getValue($builder);
         $config['global_middleware'] = [123]; // Invalid middleware type
         $configProperty->setValue($builder, $config);
+        $builder->baseDomain('localhost');
         
         $this->expectException(RouterException::class);
         $this->expectExceptionMessage('Invalid middleware at index 0: must be string, object, or callable');
@@ -329,6 +356,7 @@ class RouterConfigurationBuilderTest extends TestCase
         $config = $configProperty->getValue($builder);
         $config['allowed_domains'] = ['']; // Empty domain string
         $configProperty->setValue($builder, $config);
+        $builder->baseDomain('localhost');
         
         $this->expectException(RouterException::class);
         $this->expectExceptionMessage('Invalid domain at index 0: must be non-empty string');
@@ -353,6 +381,7 @@ class RouterConfigurationBuilderTest extends TestCase
             ->enableCache()
             ->routesDirectory('/')
             ->globalMiddleware(['TestMiddleware'])
+            ->baseDomain('localhost')
             ->build();
         
         // Verify configuration was applied
@@ -370,6 +399,7 @@ class RouterConfigurationBuilderTest extends TestCase
         Router::resetInstance();
         
         // Initialize router by getting instance
+        Router::configure(['base_domain' => 'localhost']);
         Router::getInstance();
         
         $this->expectException(RouterException::class);
@@ -411,6 +441,7 @@ class RouterConfigurationBuilderTest extends TestCase
             ->debugMode(false)  // This should win
             ->enableCache()
             ->disableCache()    // This should win
+            ->baseDomain('localhost')
             ->build();
         
         $this->assertFalse(Router::isDebugMode(), 'Last debugMode(false) call should win');
@@ -452,7 +483,8 @@ class RouterConfigurationBuilderTest extends TestCase
         // Set initial configuration via array
         Router::configure([
             'debug_mode' => false,
-            'global_middleware' => ['ExistingMiddleware']
+            'global_middleware' => ['ExistingMiddleware'],
+            'base_domain' => 'localhost',
         ]);
         
         Router::resetInstance(); // Reset instance but keep config
@@ -461,6 +493,7 @@ class RouterConfigurationBuilderTest extends TestCase
         Router::configure()
             ->debugMode(true)  // Should override existing
             ->addGlobalMiddleware('NewMiddleware')  // Should merge with existing
+            ->baseDomain('localhost')
             ->build();
         
         $this->assertTrue(Router::isDebugMode(), 'Fluent config should override array config');
@@ -477,6 +510,7 @@ class RouterConfigurationBuilderTest extends TestCase
         Router::configure()
             ->enableCache()     // Enable cache first
             ->debugMode(true)   // This should disable cache
+            ->baseDomain('localhost')
             ->build();
         
         $this->assertTrue(Router::isDebugMode(), 'Debug mode should be enabled');
@@ -504,6 +538,7 @@ class RouterConfigurationBuilderTest extends TestCase
         // Test callable middleware
         $callableMiddleware = function() {};
         $builder->addGlobalMiddleware($callableMiddleware);
+        $builder->baseDomain('localhost');
         
         // Should build without errors
         $builder->build();
@@ -521,6 +556,7 @@ class RouterConfigurationBuilderTest extends TestCase
         
         // Test with existing directory (current directory should exist)
         $builder->routesDirectory(__DIR__);
+        $builder->baseDomain('localhost');
         
         // Should build without errors
         $builder->build();
@@ -542,6 +578,7 @@ class RouterConfigurationBuilderTest extends TestCase
         
         try {
             $builder->cacheDirectory($tempDir);
+            $builder->baseDomain('localhost');
             
             // Should build without errors
             $builder->build();

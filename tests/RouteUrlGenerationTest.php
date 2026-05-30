@@ -11,6 +11,7 @@ class RouteUrlGenerationTest extends TestCase
     protected function setUp(): void
     {
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
     }
 
     public function testGenerateUrlForBasicRoute()

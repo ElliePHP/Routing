@@ -23,10 +23,15 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 class FluentConfigurationIntegrationTest extends TestCase
 {
+    private function resetRouter(): void
+    {
+        Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
+    }
+
     protected function setUp(): void
     {
-        // Reset router state before each test
-        Router::resetInstance();
+        $this->resetRouter();
     }
 
     protected function tearDown(): void
@@ -41,8 +46,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testFluentConfigurationWithActualRouterUsage(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Configure router using fluent API
         Router::configure()
@@ -50,6 +54,7 @@ class FluentConfigurationIntegrationTest extends TestCase
             ->disableCache()
             ->routesDirectory('/')
             ->enforceDomain(false)
+            ->baseDomain('localhost')
             ->build();
 
         // Define routes after configuration
@@ -95,14 +100,14 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testMixedFluentAndArrayConfiguration(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Start with array configuration
         Router::configure([
             'debug_mode' => false,
             'cache_enabled' => true,
-            'global_middleware' => ['ArrayMiddleware']
+            'global_middleware' => ['ArrayMiddleware'],
+            'base_domain' => 'localhost',
         ]);
 
         // Add fluent configuration on top
@@ -131,8 +136,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testFluentConfigurationWithMiddleware(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Create test middleware
         $testMiddleware = new class implements MiddlewareInterface {
@@ -148,6 +152,7 @@ class FluentConfigurationIntegrationTest extends TestCase
         // Configure with middleware
         Router::configure()
             ->globalMiddleware([$testMiddleware])
+            ->baseDomain('localhost')
             ->build();
 
         Router::get('/middleware-test', function () {
@@ -168,12 +173,12 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testFluentConfigurationWithDomainSettings(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         Router::configure()
             ->allowedDomains(['example.com', 'api.example.com'])
             ->enforceDomain(false) // Disable for testing
+            ->baseDomain('localhost')
             ->build();
 
         Router::get('/domain-test', function () {
@@ -194,8 +199,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testFluentConfigurationWithCustomErrorFormatter(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         $customFormatter = new class implements ErrorFormatterInterface {
             public function format(\Throwable $e, bool $debugMode): array
@@ -207,6 +211,7 @@ class FluentConfigurationIntegrationTest extends TestCase
         Router::configure()
             ->errorFormatter($customFormatter)
             ->debugMode(true)
+            ->baseDomain('localhost')
             ->build();
 
         Router::get('/error-test', function () {
@@ -229,8 +234,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testFluentConfigurationWithContainer(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         $container = new class implements ContainerInterface {
             private array $services = [];
@@ -255,6 +259,7 @@ class FluentConfigurationIntegrationTest extends TestCase
 
         Router::configure()
             ->container($container)
+            ->baseDomain('localhost')
             ->build();
 
         // Test that container is available (this would be used internally by the router)
@@ -276,8 +281,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testExistingArrayConfigurationUnchanged(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Use traditional array configuration
         Router::configure([
@@ -286,7 +290,8 @@ class FluentConfigurationIntegrationTest extends TestCase
             'routes_directory' => '/',
             'global_middleware' => [], // Remove invalid middleware for test
             'allowed_domains' => ['test.com'],
-            'enforce_domain' => false
+            'enforce_domain' => false,
+            'base_domain' => 'localhost',
         ]);
 
         // Define routes
@@ -346,8 +351,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testConfigurationMethodChainingReturnsCorrectInstance(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         $builder = Router::configure();
         $this->assertInstanceOf(RouterConfigurationBuilder::class, $builder);
@@ -378,8 +382,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testComplexFluentConfigurationScenario(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Complex configuration with all options
         Router::configure()
@@ -389,6 +392,7 @@ class FluentConfigurationIntegrationTest extends TestCase
             ->globalMiddleware([]) // Remove invalid middleware for test
             ->allowedDomains(['api.example.com', 'admin.example.com'])
             ->enforceDomain(false)
+            ->baseDomain('localhost')
             ->errorFormatter(new HtmlErrorFormatter())
             ->apply(); // Use apply() instead of build()
 
@@ -433,14 +437,14 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testConfigurationValidationErrors(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Test invalid error formatter
         $this->expectException(\TypeError::class);
 
         Router::configure()
             ->errorFormatter(new \stdClass()) // Invalid formatter
+            ->baseDomain('localhost')
             ->build();
     }
 
@@ -450,8 +454,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testConfigurationAfterInitializationThrowsException(): void
     {
-        // Ensure router is reset first
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Initialize router by getting instance
         Router::getInstance();
@@ -470,8 +473,7 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testFluentConfigurationAfterInitializationThrowsException(): void
     {
-        // Ensure router is reset first
-        Router::resetInstance();
+        $this->resetRouter();
         
         // Initialize router by getting instance
         Router::getInstance();
@@ -489,23 +491,25 @@ class FluentConfigurationIntegrationTest extends TestCase
     public function testMethodCallOrderIndependence(): void
     {
         // Configuration in one order
-        Router::resetInstance();
+        $this->resetRouter();
         Router::configure()
             ->debugMode(true)
             ->routesDirectory('/test1')
             ->globalMiddleware(['Middleware1'])
             ->allowedDomains(['domain1.com'])
+            ->baseDomain('localhost')
             ->build();
 
         $config1 = Router::getConfig();
 
         // Same configuration in different order
-        Router::resetInstance();
+        $this->resetRouter();
         Router::configure()
             ->allowedDomains(['domain1.com'])
             ->globalMiddleware(['Middleware1'])
             ->routesDirectory('/test1')
             ->debugMode(true)
+            ->baseDomain('localhost')
             ->build();
 
         $config2 = Router::getConfig();
@@ -520,14 +524,14 @@ class FluentConfigurationIntegrationTest extends TestCase
      */
     public function testRepeatedMethodCallsUseLastValue(): void
     {
-        // Ensure router is reset
-        Router::resetInstance();
+        $this->resetRouter();
         
         Router::configure()
             ->debugMode(false)
             ->debugMode(true)  // Should override previous
             ->routesDirectory('/first')
             ->routesDirectory('/second') // Should override previous
+            ->baseDomain('localhost')
             ->build();
 
         $this->assertTrue(Router::isDebugMode());

@@ -11,6 +11,7 @@ use Nyholm\Psr7\ServerRequest;
 Router::configure([
     'debug_mode' => true,
     'cache_enabled' => false,
+    'base_domain' => 'localhost',
 ]);
 
 // Define routes

@@ -18,6 +18,7 @@ class FluentApiTest extends TestCase
     protected function setUp(): void
     {
         Router::resetInstance();
+        Router::configure(['base_domain' => 'localhost']);
         Router::reset();
     }
 
@@ -126,6 +127,7 @@ class FluentApiTest extends TestCase
         )
             ->then(function (string $method, string $url, string $handlerType) {
                 Router::resetInstance();
+                Router::configure(['base_domain' => 'localhost']);
                 Router::reset();
 
                 // Create different handler types
@@ -169,6 +171,7 @@ class FluentApiTest extends TestCase
         )
             ->then(function (string $factoryMethod, string $stringParam, array $arrayParam) {
                 Router::resetInstance();
+                Router::configure(['base_domain' => 'localhost']);
                 Router::reset();
 
                 // Call the factory method with appropriate parameter
@@ -229,6 +232,7 @@ class FluentApiTest extends TestCase
                 string $domain
             ) {
                 Router::resetInstance();
+                Router::configure(['base_domain' => 'localhost']);
                 Router::reset();
 
                 $handler = fn() => ['test' => true];
@@ -259,6 +263,7 @@ class FluentApiTest extends TestCase
 
                 // Now test that the same configuration works with fluent syntax
                 Router::resetInstance();
+                Router::configure(['base_domain' => 'localhost']);
                 Router::reset();
 
                 Router::$method($url, $handler)
